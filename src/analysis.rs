@@ -13,14 +13,14 @@ pub(crate) enum BlockEnd {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub(crate) struct AbstractBlock {
-    pub parent: llvm_ir::Function,
+pub(crate) struct AbstractBlock<'a> {
+    pub parent: &'a llvm_ir::Function,
     pub needs_prolog: bool,
     pub body: Function,
     pub term: Option<BlockEnd>,
 }
 
-impl AbstractBlock {
+impl AbstractBlock<'_> {
     /// Returns the destination if this function
     /// ends with a branch or function call
     pub fn get_dest(&self, func_starts: &HashMap<String, FunctionId>) -> Option<FunctionId> {
@@ -306,7 +306,7 @@ impl BlockEdge {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ChainNode<'a> {
-    pub block: &'a AbstractBlock,
+    pub block: &'a AbstractBlock<'a>,
     pub cmd_count: Option<usize>,
     pub depth: usize,
 }

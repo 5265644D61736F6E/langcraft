@@ -510,9 +510,9 @@ where
     ).collect()
 }
 
-type AbstractCompileOutput = (Vec<AbstractBlock>, HashMap<String, BTreeSet<ScoreHolder>>, HashMap<String, McFuncId>);
+type AbstractCompileOutput<'a> = (Vec<AbstractBlock<'a>>, HashMap<String, BTreeSet<ScoreHolder>>, HashMap<String, McFuncId>);
 
-fn compile_module_abstract(module: &Module, options: &BuildOptions, globals: &GlobalVarList) -> AbstractCompileOutput {
+fn compile_module_abstract<'a>(module: &'a Module, options: &BuildOptions, globals: &GlobalVarList) -> AbstractCompileOutput<'a> {
     let mut clobber_list = HashMap::<String, BTreeSet<ScoreHolder>>::new();
 
     let mut funcs = Vec::new();
@@ -1140,12 +1140,16 @@ fn getelementptr_const(
     let result = if let Constant::GlobalReference { name, ty } = &**address {
         let mut offset = globals
             .get(&name)
-            .unwrap_or_else(|| panic!("couldn't find global {:?}", name))
+            .unwrap_or_else(|| {eprintln!("couldn't find global {:?}", name); &(0,None)})
             .0;
         let mut ty = ty.clone();
 
         for index in &indices[1..] {
             let index = if let Constant::Int { bits: 32, value } = &**index {
+                *value as i32
+            } else if let Constant::Int { bits: 64, value } = &**index {
+                eprintln!("[ERR] GetElementPtr is not supported with 64 bits");
+
                 *value as i32
             } else {
                 unreachable!()
@@ -1183,7 +1187,9 @@ fn getelementptr_const(
 
         offset
     } else {
-        todo!("{:?}", address)
+        eprintln!("[ERR] {:?} is unimplemented for getelementptr", address);
+
+        0
     };
 
     println!("Result: {:?}", result);
@@ -1234,14 +1240,18 @@ fn compile_global_var_init<'a>(
 fn global_var_layout<'a>(v: &'a [GlobalVariable], funcs: &[Function], alloc: &mut StaticAllocator, tys: &Types) -> GlobalVarList<'a> {
     let mut result = HashMap::new();
     for v in v.iter() {
-        let pointee_type = if let Type::PointerType { pointee_type, .. } = &v.ty.as_ref() {
-            pointee_type
+        if v.initializer.is_none() {
+            eprintln!("[ERR] {} is not defined.",v.name);
         } else {
-            unreachable!()
-        };
+            let pointee_type = if let Type::PointerType { pointee_type, .. } = &v.ty.as_ref() {
+                pointee_type
+            } else {
+                unreachable!()
+            };
 
-        let start = alloc.reserve(type_layout(pointee_type, tys).size() as u32);
-        result.insert(&v.name, (start, Some((**v.initializer.as_ref().unwrap()).clone())));
+            let start = alloc.reserve(type_layout(pointee_type, tys).size() as u32);
+            result.insert(&v.name, (start, Some((**v.initializer.as_ref().unwrap()).clone())));
+        }
     }
 
     for func in funcs.iter() {
@@ -2030,7 +2040,14 @@ fn compile_shl(
             Type::IntegerType { bits: 24 } => 24,
             Type::IntegerType { bits: 16 } => 16,
             Type::IntegerType { bits: 8 } => 8,
-            _ => todo!("{:?}, shift: {:?}", operand0, operand1),
+            Type::IntegerType { bits } => {
+                eprintln!("[ERR] Cannot shift {}-bit integers", bits);
+                0
+            },
+            _ => {
+                eprintln!("[ERR] Cannot shift {:?}", op0_type);
+                0
+            },
         };
 
         let (mut cmds, op0) = eval_operand(operand0, globals, tys);
@@ -2109,7 +2126,8 @@ fn compile_lshr(
         if let Type::IntegerType { bits } = &*op0_type {
             // this error was moved down
         } else {
-            todo!("{:?}", operand0);
+            dumploc(debugloc);
+            eprintln!("[ERR] Logical shift right is only implemented for integers");
         }
 
         let (tmp, op1) = eval_operand(operand1, globals, tys);
@@ -2148,7 +2166,7 @@ fn compile_lshr(
             cmds.push(assign(dest.next().unwrap(), param(0, 1)));
         } else {
             dumploc(debugloc);
-            todo!("Logical Shift Right with {} bits",op0.len());
+            eprintln!("[ERR] Logical Shift Right with {} bits is unimplemented",op0.len());
         }
 
         cmds
@@ -2160,13 +2178,17 @@ fn compile_call(
         function,
         arguments,
         dest,
+        debugloc,
         ..
     }: &Call,
     globals: &GlobalVarList,
     tys: &Types,
 ) -> (Vec<Command>, Option<Vec<Command>>) {
     let function = match function {
-        Either::Left(asm) => todo!("inline assembly {:?}", asm),
+        Either::Left(asm) => {
+            eprintln!("[ERR] Inline assembly unsupported");
+            return (Vec::new(),None);
+        },
         Either::Right(operand) => operand,
     };
 
@@ -2825,7 +2847,26 @@ fn compile_call(
             todo!("{:?}", pointee_type)
         }
     } else {
-        todo!("{:?}", function)
+        // this function call is already unaccounted for but determine the error
+        dumploc(debugloc);
+        
+        if let Operand::ConstantOperand(oper) = function {
+                if let Constant::BitCast(bc) = &**oper {
+                    eprintln!("[ERR] Bit cast function calls not supported");
+                } else if let Constant::GlobalReference { name: Name::Name(name), ty } = &**oper {
+                    if let Type::FuncType { result_type, is_var_arg: true, .. } = &**ty {
+                        eprintln!("[ERR] Va-args function calls not supported");
+                    } else {
+                        eprintln!("[ERR] {:?} not supported", ty);
+                    }
+                } else {
+                    eprintln!("[ERR] {:?} not supported", oper);
+                }
+        } else {
+            eprintln!("[ERR] {:?} not supported", function);
+        }
+        
+        (Vec::new(),None)
     }
 }
 
@@ -3283,14 +3324,14 @@ fn compile_block_end(block_end: &BlockEnd, body_cmds: usize, parent: &Function, 
     cmds
 }
 
-fn compile_function(
-    func: &Function,
+fn compile_function<'a>(
+    func: &'a Function,
     globals: &GlobalVarList,
     tys: &Types,
     options: &BuildOptions,
-) -> (Vec<AbstractBlock>, HashMap<ScoreHolder, cir::HolderUse>) {
+) -> (Vec<AbstractBlock<'a>>, HashMap<ScoreHolder, cir::HolderUse>) {
     if func.is_var_arg {
-        todo!("functions with variadic arguments");
+        eprintln!("[ERR] Functions with variadic arguments have not been implemented yet");
     }
 
     if func.basic_blocks.is_empty() {
@@ -3345,7 +3386,7 @@ fn compile_function(
                     this.cmds.extend(before);
 
                     result.push(AbstractBlock {
-                        parent: func.clone(),
+                        parent: func,
                         needs_prolog: idx == 0 && sub == 1,
                         body: std::mem::replace(&mut this, make_new_func(sub)),
                         term: Some(term),
@@ -3364,7 +3405,7 @@ fn compile_function(
             ));
 
             result.push(AbstractBlock {
-                parent: func.clone(),
+                parent: func,
                 needs_prolog: idx == 0 && sub == 1,
                 body: this,
                 term: Some(BlockEnd::Normal(block.term.clone())),
@@ -3678,7 +3719,7 @@ pub fn compile_arithmetic(
             ScoreOpKind::MulAssign => {
                 cmds.extend(mul_64_bit(op0_lo, op0_hi, op1_lo, op1_hi, dest.clone()));
             }
-            _ => todo!("{:?}", kind),
+            _ => eprintln!("[ERR] 64-bit {:?} is unsupported", kind),
         }
 
         cmds
@@ -3860,6 +3901,10 @@ pub fn type_layout(ty: &Type, tys: &Types) -> Layout {
         }
         Type::PointerType { .. } => Layout::from_size_align(4, 4).unwrap(),
         Type::VoidType => Layout::from_size_align(0, 4).unwrap(),
+        Type::FPType(precision) => {
+            eprintln!("[ERR] Floating point not supported");
+            Layout::from_size_align(4,4).unwrap()
+        },
         _ => todo!("size of type {:?}", ty),
     }
 }
@@ -4189,7 +4234,10 @@ fn compile_getelementptr(
                 match eval_maybe_const(index, globals, tys) {
                     MaybeConst::Const(c) => offset += pointee_size as i32 * c,
                     MaybeConst::NonConst(a, b) => {
-                        assert_eq!(b.len(), 1);
+                        if b.len() != 1 {
+                            eprintln!("[ERR] b can only be word-sized (32-bit)");
+                        }
+                        
                         let b = b.into_iter().next().unwrap();
 
                         cmds.extend(a);
@@ -4774,9 +4822,9 @@ pub fn compile_instr(
                 assert_eq!(source1.len(), *num_elements);
                 assert_eq!(dest.len(), *num_elements);
             } else {
-                assert_eq!(source0.len(), 1);
-                assert_eq!(source1.len(), 1);
-                assert_eq!(dest.len(), 1);
+                if (source0.len() != 1) || (source1.len() != 1) || (dest.len() != 1) {
+                    eprintln!("[ERR] Can only divide words (32-bit)");
+                }
             };
 
             for (source0, (source1, dest)) in source0
@@ -4834,9 +4882,9 @@ pub fn compile_instr(
                 assert_eq!(source1.len(), *num_elements);
                 assert_eq!(dest.len(), *num_elements);
             } else {
-                assert_eq!(source0.len(), 1);
-                assert_eq!(source1.len(), 1);
-                assert_eq!(dest.len(), 1);
+                if (source0.len() != 1) || (source1.len() != 1) || (dest.len() != 1) {
+                    eprintln!("[ERR] Can only divide words (32-bit)");
+                }
             };
 
             for (source0, (source1, dest)) in source0
@@ -4915,6 +4963,7 @@ pub fn compile_instr(
             operand0,
             operand1,
             dest,
+            debugloc,
             ..
         }) => {
             // TODO: When operand1 is a constant, we can optimize the direct comparison into a `matches`
@@ -5003,7 +5052,10 @@ pub fn compile_instr(
                             lo_lt_check.with_run(assign_lit(dest, 1));
                             cmds.push(lo_lt_check.into());
                         }
-                        p => todo!("{:?}", p),
+                        p => {
+                            dumploc(debugloc);
+                            eprintln!("[ERR] Signed 64-bit comparisons are unimplemented");
+                        },
                     }
 
                     cmds
@@ -5075,7 +5127,7 @@ pub fn compile_instr(
 
                     cmds
                 }
-                ty @ Type::VectorType { .. } => todo!("{:?}", ty),
+                ty @ Type::VectorType { .. } => {eprintln!("[ERR] ICMP does not support this vector");cmds}
                 ty => {
                     let dest = ScoreHolder::from_local_name(dest.clone(), 1)
                         .into_iter()
@@ -5146,7 +5198,9 @@ pub fn compile_instr(
                 let (tmp, val) = eval_operand(value, globals, tys);
                 cmds.extend(tmp);
 
-                assert_eq!(val.len(), dst.len());
+                if val.len() != dst.len() {
+                    eprintln!("[ERR] Phi is not supported with different bit lengths.");
+                }
 
                 for (val_word, dst_word) in val.into_iter().zip(dst.iter().cloned()) {
                     let mut cmd = Execute::new();
@@ -5285,7 +5339,7 @@ pub fn compile_instr(
                     cmds.extend(truncate_to(dest, 1));
                 } else {
                     println!("{:?}", aggregate);
-                    todo!("multiword extract value {:?}", result_type);
+                    eprintln!("[ERR] ExtractValue can not extract {}-bit integers",size);
                 }
             } else {
                 todo!("{:?}", aggregate)
@@ -5446,14 +5500,21 @@ pub fn compile_instr(
                 } else {
                     todo!("{:?}", operand)
                 }
+            } else if matches!(&**to_type, Type::VectorType { .. }) {
+                eprintln!("[ERR] Sign extension to vector is unimplemented");
+
+                cmds
             } else {
-                todo!("sign extend to {:?}", to_type)
+                eprintln!("[ERR] Sign extension to {:?} is unimplemented", to_type);
+                
+                cmds
             }
         }
         Instruction::ZExt(ZExt {
             operand,
             to_type,
             dest,
+            debugloc,
             ..
         }) => {
             let (mut cmds, op) = eval_operand(operand, globals, tys);
@@ -5489,10 +5550,14 @@ pub fn compile_instr(
 
                             return (cmds, None);
                         } else {
-                            todo!("{:?}", elem_ty)
+                            dumploc(debugloc);
+                            eprintln!("[ERR] Zero extension is only implemented for 4-element vectors and integers");
                         }
                     }
-                    _ => todo!("{:?} -> {:?}", operand, to_type)
+                    _ => {
+                        dumploc(debugloc);
+                        eprintln!("[ERR] Zero extension is only implemented for 4-element vectors and integers");
+                    }
                 }
 
                 for dst in dst[1..].iter().cloned() {
@@ -5508,7 +5573,8 @@ pub fn compile_instr(
                         cmds.push(make_op_lit(dst[1].clone(), "%=", 1 << (bits - 32)));
                     }
                 } else {
-                    todo!("{:?}", operand)
+                    dumploc(debugloc);
+                    eprintln!("[ERR] Cannot zero-extend this vector");
                 };
 
                 for dst in dst[2..].iter().cloned() {
@@ -5765,7 +5831,7 @@ pub fn compile_instr(
                         }
                     }
                 }
-                _ => todo!("{:?}", element_type),
+                _ => eprintln!("[ERR] ShuffleVector is only implemented for 32 and 1 bit integers"),
             }
 
             cmds
@@ -5802,6 +5868,9 @@ pub fn compile_instr(
                             cmds.push(assign(dest.clone(), vec[c / 4].clone()));
                             cmds.push(make_op_lit(dest, "/=", 1 << (8 * (c % 4))));
                         }
+                        Type::IntegerType { bits } => {
+                            eprintln!("[ERR] {}-bit constants for ExtractElement are not supported",bits);
+                        }
                         ty => todo!("{:?}", ty),
                     }
                 }
@@ -5815,7 +5884,7 @@ pub fn compile_instr(
             element,
             index,
             dest,
-            debugloc: _,
+            debugloc,
         }) => {
             let element_type = if let Type::VectorType { element_type, .. } = &*vector.get_type(tys) {
                 (*element_type).clone()
@@ -5824,7 +5893,8 @@ pub fn compile_instr(
             };
 
             if !matches!(&*element_type, Type::IntegerType { bits: 32 }) {
-                todo!("{:?}", vector)
+                dumploc(debugloc);
+                eprintln!("[ERR] InsertElement is only supported for 32-bit integers");
             }
 
             let dest =
@@ -5835,7 +5905,11 @@ pub fn compile_instr(
             let (tmp, elem) = eval_operand(element, globals, tys);
             cmds.extend(tmp);
 
-            assert_eq!(elem.len(), 1);
+            if elem.len() != 1 {
+                dumploc(debugloc);
+                eprintln!("[ERR] InsertElement is only supported for 32-bit integers");
+            }
+            
             let elem = elem.into_iter().next().unwrap();
 
             match eval_maybe_const(index, globals, tys) {
@@ -5855,7 +5929,98 @@ pub fn compile_instr(
 
             cmds
         }
-        _ => todo!("instruction {:?}", instr),
+        Instruction::CmpXchg(llvm_ir::instruction::CmpXchg {..}) => {
+            eprintln!("[ERR] CmpXchg not supported");
+
+            Vec::new()
+        }
+        Instruction::FPToUI(llvm_ir::instruction::FPToUI {
+            operand: _,
+            to_type: _,
+            dest: _,
+            debugloc: _
+        }) => {
+            eprintln!("[ERR] FPtoUI not supported");
+
+            Vec::new()
+        }
+        Instruction::FPTrunc(llvm_ir::instruction::FPTrunc {
+            operand: _,
+            to_type: _,
+            dest: _,
+            debugloc: _
+        }) => {
+            eprintln!("[ERR] FPTrunc not supported");
+
+            Vec::new()
+        }
+        Instruction::LandingPad(llvm_ir::instruction::LandingPad {
+            ..
+        }) => {
+            eprintln!("[ERR] LandingPad not supported");
+
+            Vec::new()
+        }
+        Instruction::AtomicRMW(llvm_ir::instruction::AtomicRMW {..}) => {
+            eprintln!("[ERR] AtomicRMW not supported");
+
+            Vec::new()
+        }
+        Instruction::AShr(llvm_ir::instruction::AShr {..}) => {
+            eprintln!("[ERR] Arithmetic Shift Right not supported");
+
+            Vec::new()
+        }
+        Instruction::FAdd(llvm_ir::instruction::FAdd {..}) => {
+            eprintln!("[ERR] Floating point add not supported");
+
+            Vec::new()
+        }
+        Instruction::FSub(llvm_ir::instruction::FSub {..}) => {
+            eprintln!("[ERR] Floating point subtract not supported");
+
+            Vec::new()
+        }
+        Instruction::FMul(llvm_ir::instruction::FMul {..}) => {
+            eprintln!("[ERR] Floating point multiply not supported");
+
+            Vec::new()
+        }
+        Instruction::FDiv(llvm_ir::instruction::FDiv {..}) => {
+            eprintln!("[ERR] Floating point divide not supported");
+
+            Vec::new()
+        }
+        Instruction::FCmp(llvm_ir::instruction::FCmp {..}) => {
+            eprintln!("[ERR] Floating point compare not supported");
+
+            Vec::new()
+        }
+        Instruction::FPExt(llvm_ir::instruction::FPExt {..}) => {
+            eprintln!("[ERR] Floating point extend not supported");
+
+            Vec::new()
+        }
+        Instruction::UIToFP(llvm_ir::instruction::UIToFP {..}) => {
+            eprintln!("[ERR] Unsigned int to floating point not supported");
+
+            Vec::new()
+        }
+        Instruction::SIToFP(llvm_ir::instruction::SIToFP {..}) => {
+            eprintln!("[ERR] Signed int to floating point not supported");
+
+            Vec::new()
+        }
+        Instruction::PtrToInt(llvm_ir::instruction::PtrToInt {..}) => {
+            eprintln!("[ERR] Pointer to integer not supported");
+
+            Vec::new()
+        }
+        _ => {
+            eprintln!("[ERR] instruction {:?} not supported", instr);
+
+            Vec::new()
+        },
     };
 
     (result, None)
@@ -5887,7 +6052,7 @@ pub fn eval_constant(
         Constant::GlobalReference { name, .. } => {
             let addr = globals
                 .get(name)
-                .unwrap_or_else(|| panic!("failed to get {:?}", name))
+                .unwrap_or_else(|| {eprintln!("[ERR] Unresolved symbol {:?}", name); &(0,None)})
                 .0;
 
             if addr == u32::MAX {
@@ -6059,7 +6224,8 @@ pub fn eval_constant(
                         val0 as u8, val1 as u8, val2 as u8, val3 as u8,
                     ]))
                 } else {
-                    todo!()
+                    eprintln!("[ERR] 8-bit vector only supported with 4 elements");
+                    MaybeConst::Const(0)
                 }
             } else if let Some(as_32) = as_32 {
                 let num = get_unique_num();
@@ -6092,7 +6258,8 @@ pub fn eval_constant(
 
                 MaybeConst::NonConst(cmds, holders)
             } else {
-                todo!("{:?}", elems);
+                eprintln!("[ERR] Vector only supported with 8, 32, and 64 bits");
+                MaybeConst::Const(0)
             }
         }
         Constant::ICmp(icmp) => {
@@ -6156,7 +6323,7 @@ pub fn eval_constant(
                 eval_constant(&false_value, globals, tys)
             }
         }
-        _ => todo!("evaluate constant {:?}", con),
+        _ => {eprintln!("[ERR] Constant {:?} is unsupported", con); MaybeConst::Const(0)},
     }
 }
 
