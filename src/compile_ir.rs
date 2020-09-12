@@ -3928,8 +3928,17 @@ pub fn type_layout(ty: &Type, tys: &Types) -> Layout {
         Type::PointerType { .. } => Layout::from_size_align(4, 4).unwrap(),
         Type::VoidType => Layout::from_size_align(0, 4).unwrap(),
         Type::FPType(precision) => {
-            eprintln!("[ERR] Floating point not supported");
-            Layout::from_size_align(4,4).unwrap()
+            eprintln!("[WARN] Floating point not supported");
+            
+            match precision {
+                llvm_ir::types::FPType::Half => Layout::from_size_align(2,4).unwrap(),
+                llvm_ir::types::FPType::Single => Layout::from_size_align(4,4).unwrap(),
+                llvm_ir::types::FPType::Double => Layout::from_size_align(8,4).unwrap(),
+                llvm_ir::types::FPType::FP128 => Layout::from_size_align(16,4).unwrap(),
+                llvm_ir::types::FPType::X86_FP80 => Layout::from_size_align(10,4).unwrap(),
+                llvm_ir::types::FPType::PPC_FP128 => Layout::from_size_align(16,4).unwrap(),
+            }
+            
         },
         _ => todo!("size of type {:?}", ty),
     }
@@ -4534,6 +4543,7 @@ pub fn compile_instr(
             address,
             value,
             alignment,
+            debugloc,
             ..
         }) => {
             let (mut cmds, addr) = eval_operand(address, globals, tys);
@@ -4692,7 +4702,8 @@ pub fn compile_instr(
                     cmds.push(make_op_lit(ptr(), "+=", 1));
                 }
             } else {
-                todo!("{:?} {}", value, alignment)
+                dumploc(debugloc);
+                eprintln!("[ERR] 80-bit floating point store not supported");
             }
 
             cmds
@@ -4783,12 +4794,7 @@ pub fn compile_instr(
                     todo!("{:?}", pointee_layout)
                 }
             } else {
-                todo!(
-                    "{:?} with layout {:?} and pointer alignment {}",
-                    pointee_type,
-                    pointee_layout,
-                    alignment
-                )
+                eprintln!("[ERR] 80-bit floating point load not supported");
             }
 
             cmds
@@ -6019,8 +6025,10 @@ pub fn compile_instr(
             Vec::new()
         }
         Instruction::LandingPad(llvm_ir::instruction::LandingPad {
+            debugloc,
             ..
         }) => {
+            dumploc(debugloc);
             eprintln!("[ERR] LandingPad not supported");
 
             Vec::new()
