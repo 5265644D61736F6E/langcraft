@@ -5497,7 +5497,7 @@ pub fn compile_instr(
                     cmds.push(exec.into());
 
                     cmds
-                } else if matches!(operand.get_type(), Type::IntegerType { bits: 8 }) {
+                } else if matches!(&*operand.get_type(tys), Type::IntegerType { bits: 8 }) {
                     let op = op.into_iter().next().unwrap();
                     cmds.push(assign(dest[0].clone(), op));
                     cmds.push(make_op_lit(dest[0].clone(), "%=", 256));
