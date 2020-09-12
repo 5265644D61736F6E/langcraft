@@ -2166,7 +2166,7 @@ fn compile_lshr(
             cmds.push(assign(dest.next().unwrap(), param(0, 1)));
         } else {
             dumploc(debugloc);
-            eprintln!("[ERR] Logical Shift Right with {} bits is unimplemented",op0.len());
+            eprintln!("[ERR] Logical Shift Right with {} bits is unimplemented",op0.len() * 32);
         }
 
         cmds
@@ -2221,7 +2221,7 @@ fn compile_ashr(
             cmds.push(assign(dest, param(0, 0)));
         } else {
             dumploc(debugloc);
-            eprintln!("[ERR] Arithmetic Shift Right with {} bits is unimplemented",op0.len());
+            eprintln!("[ERR] Arithmetic Shift Right with {} bits is unimplemented",op0.len() * 32);
         }
 
         cmds
