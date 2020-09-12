@@ -2199,6 +2199,32 @@ fn compile_call(
             } else {
                 None
             }
+        } else if let Constant::BitCast (llvm_ir::constant::BitCast { operand, to_type }) = &**c {
+            let mut val = None;
+            
+            // there will always be an stderr output so do this now
+            dumploc(debugloc);
+
+            if let Constant::GlobalReference { name: Name::Name(name), ty } = &**operand {
+                if let Type::FuncType { result_type: _, is_var_arg: false, .. } = &**ty {
+                    if let Type::PointerType {pointee_type, addr_space: _} = &**to_type {
+                        if let Type::FuncType { result_type, is_var_arg: false, .. } = &**pointee_type {
+                            eprintln!("[WARN] The compilation unit casts a function type to a different function type. Are the declarations different for this function?");
+                            val = Some((name, result_type));
+                        } else {
+                            eprintln!("[ERR] Cannot call a data pointer unless cast.");
+                        }
+                    } else {
+                        eprintln!("[ERR] Cannot call a non-pointer unless cast.");
+                    }
+                } else {
+                    eprintln!("[ERR] Cannot cast a data pointer to a function.");
+                }
+            } else {
+                eprintln!("[ERR] Cannot handle this callee. Are you trying to double-cast?");
+            }
+            
+            val
         } else {
             None
         }
@@ -2852,7 +2878,7 @@ fn compile_call(
         
         if let Operand::ConstantOperand(oper) = function {
                 if let Constant::BitCast(bc) = &**oper {
-                    eprintln!("[ERR] Bit cast function calls not supported");
+                    // assume that the error was already printed out
                 } else if let Constant::GlobalReference { name: Name::Name(name), ty } = &**oper {
                     if let Type::FuncType { result_type, is_var_arg: true, .. } = &**ty {
                         eprintln!("[ERR] Va-args function calls not supported");
