@@ -82,3 +82,9 @@ pub fn func_ptr_direct_cast() {
     let interp = compile_and_run(Path::new("./tests/func_ptr_direct_cast.bc"));
     assert_eq!(interp.output, vec!["1"]);
 }
+
+#[test]
+pub fn arith_shr() {
+    let interp = compile_and_run(Path::new("./tests/arith_shr.bc"));
+    assert_eq!(interp.output, vec!["-23131"]);
+}

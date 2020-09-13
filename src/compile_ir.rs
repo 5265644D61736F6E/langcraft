@@ -1146,11 +1146,11 @@ fn getelementptr_const(
 
         for index in &indices[1..] {
             let index = if let Constant::Int { bits: 32, value } = &**index {
-                *value as i32
-            } else if let Constant::Int { bits: 64, value } = &**index {
-                eprintln!("[ERR] GetElementPtr is not supported with 64 bits");
+                *value as u32
+            } else if let Constant::Int { bits, value } = &**index {
+                eprintln!("[WARN] GetElementPtr is not supported with {} bits, truncating to 32 bits",bits);
 
-                *value as i32
+                *value as u32
             } else {
                 unreachable!()
             };
@@ -3156,6 +3156,11 @@ pub(crate) fn compile_terminator(
                 }
                 .into(),
             );
+
+            (cmds, Either::Left(Vec::new()))
+        }
+        Terminator::Invoke(_) => {
+            eprintln!("[ERR] Invocation is not supported.");
 
             (cmds, Either::Left(Vec::new()))
         }
