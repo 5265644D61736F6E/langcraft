@@ -6451,6 +6451,15 @@ pub fn eval_constant(
                 eval_constant(&false_value, globals, tys)
             }
         }
+        Constant::Float(llvm_ir::constant::Float::Single(val)) => {
+            let mut val_int = 0;
+            
+            unsafe {
+                val_int = *(val as *const f32 as *const i32);
+            }
+            
+            MaybeConst::Const(val_int)
+        }
         _ => {eprintln!("[ERR] Constant {:?} is unsupported", con); MaybeConst::Const(0)},
     }
 }

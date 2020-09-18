@@ -88,3 +88,9 @@ pub fn arith_shr() {
     let interp = compile_and_run(Path::new("./tests/arith_shr.bc"));
     assert_eq!(interp.output, vec!["-23131"]);
 }
+
+#[test]
+pub fn float_const() {
+    let interp = compile_and_run(Path::new("./tests/float_const.bc"));
+    assert_eq!(interp.output, vec!["1056964608"]);
+}
