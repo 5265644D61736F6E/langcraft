@@ -1127,7 +1127,7 @@ fn make_build_cmds(main_id: &McFuncId) -> Vec<Command> {
  * the LLVM generator has actually compiled user code into an obscure input that langcraft wasn't
  * aware could be generated.
  */
-str unreach_msg = "[NOTE] Your code sounds unpleasant, perhaps you should get it examined.";
+const unreach_msg: &str = "[NOTE] Your code sounds unpleasant, perhaps you should get it examined.";
 
 fn getelementptr_const(
     GetElementPtrConst {
@@ -5636,6 +5636,7 @@ pub fn compile_instr(
 
                     cmds
                 } else if matches!(&*operand.get_type(tys), Type::IntegerType { bits: 1 }) {
+                    let op = op.into_iter().next().unwrap();
                     let cond = ExecuteCondition::Score {
                         target: op.into(),
                         target_obj: OBJECTIVE.into(),
@@ -6162,9 +6163,6 @@ pub fn compile_instr(
                     (llvm_ir::types::FPType::Single,llvm_ir::types::FPType::Double) => {
                         let dest = ScoreHolder::from_local_name(dest.clone(),8);
                         
-                        dumploc(debugloc);
-                        eprintln!("[ERR] Floating point extend not supported for single -> double.");
-                        
                         // shift the significand left
                         cmds.push(assign(param(0,0),oper[0].clone()));
                         cmds.push(
@@ -6180,14 +6178,14 @@ pub fn compile_instr(
                     }
                     (from,to) => {
                         dumploc(debugloc);
-                        eprintln!("[ERR] Floating point extend not supported for floating points {} => {}",from,to);
+                        eprintln!("[ERR] Floating point extend not supported for floating points {:?} => {:?}",from,to);
                         Vec::new()
                     }
                 }
             } else {
                 dumploc(debugloc);
                 eprintln!("[ERR] Floating point extend is only supported for floating point types.");
-                eprintln!(unreach_msg);
+                eprintln!("{}",unreach_msg);
                 Vec::new()
             }
         }
