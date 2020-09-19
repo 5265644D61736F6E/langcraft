@@ -1194,6 +1194,10 @@ fn getelementptr_const(
         println!("next type would be {:?}", ty);
 
         offset
+    } else if let Constant::BitCast(llvm_ir::constant::BitCast { operand, to_type }) = &**address {
+        eprintln!("[ERR] BitCasts are unimplemented for getelementptr");
+        
+        0
     } else {
         eprintln!("[ERR] {:?} is unimplemented for getelementptr", address);
 
