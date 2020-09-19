@@ -2240,7 +2240,7 @@ fn compile_ashr(
             cmds.push(assign(param(1, 0), op1));
             cmds.push(
                 McFuncCall {
-                    id: McFuncId::new("intrinsic:lshr64"),
+                    id: McFuncId::new("intrinsic:ashr64"),
                 }
                 .into(),
             );
