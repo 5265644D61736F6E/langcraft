@@ -106,3 +106,9 @@ pub fn float_from_u32() {
     let interp = compile_and_run(Path::new("./tests/float_from_u32.bc"));
     assert_eq!(interp.output, vec!["1092616192","1266679813"]);
 }
+
+#[test]
+pub fn float_from_u64() {
+    let interp = compile_and_run(Path::new("./tests/float_from_u64.bc"));
+    assert_eq!(interp.output, vec!["1092616192","1361051648"]);
+}

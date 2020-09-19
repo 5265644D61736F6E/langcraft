@@ -6195,7 +6195,6 @@ pub fn compile_instr(
             to_type,
             debugloc
         }) => {
-            eprintln!("[ERR] Unsigned int to floating point not supported");
             let (mut cmds,oper) = eval_operand(operand,globals,tys);
             
             if let Type::FPType(to_len) = &**to_type {
@@ -6215,11 +6214,29 @@ pub fn compile_instr(
                         
                         cmds
                     }
+                    (Type::IntegerType { bits: 64 },llvm_ir::types::FPType::Single) => {
+                        let dest = ScoreHolder::from_local_name(dest.clone(),4);
+                        
+                        // shift the significand left
+                        cmds.push(assign(param(0,0),oper[0].clone()));
+                        cmds.push(assign(param(0,1),oper[1].clone()));
+                        cmds.push(
+                            McFuncCall {
+                                id: McFuncId::new("intrinsic:u64tof"),
+                            }
+                            .into(),
+                        );
+                        cmds.push(assign(dest[0].clone(),param(0,0)));
+                        
+                        cmds
+                    }
                     (Type::IntegerType { bits },llvm_ir::types::FPType::Single) => {
+                        dumploc(debugloc);
                         eprintln!("[ERR] Unsigned integer to floating point is not supported for {}-bit integer types.",bits);
                         Vec::new()
                     }
                     (_,_) => {
+                        dumploc(debugloc);
                         eprintln!("[ERR] Unsigned integer to floating point is only supported for 32-bit integer types.");
                         Vec::new()
                     }
