@@ -2200,8 +2200,21 @@ fn compile_ashr(
     let op0_type = operand0.get_type(tys);
 
     if let Some(value) = as_const_64(operand1) {
-        dumploc(debugloc);
-        eprintln!("[ERR] 64-bit arithmetic shift right is not supported.");
+        // TODO take advantage of the given constant
+        let mut dest = ScoreHolder::from_local_name(dest.clone(), 8).into_iter();
+
+        cmds.extend(tmp);
+        cmds.push(assign(param(0, 0), op0[0].clone()));
+        cmds.push(assign(param(0, 1), op0[1].clone()));
+        cmds.push(assign_lit(param(1, 0), value as i32));
+        cmds.push(
+            McFuncCall {
+                id: McFuncId::new("intrinsic:ashr64"),
+            }
+            .into(),
+        );
+        cmds.push(assign(dest.next().unwrap(), param(0, 0)));
+        cmds.push(assign(dest.next().unwrap(), param(0, 1)));
 
         cmds
     } else {
