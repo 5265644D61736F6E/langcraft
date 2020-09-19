@@ -5103,7 +5103,7 @@ pub fn compile_instr(
                     let source_hi = source.next().unwrap();
 
                     match predicate {
-                        IntPredicate::UGT => {
+                        IntPredicate::UGT | IntPredicate::UGE => {
                             let hi_is_gt = get_unique_holder();
                             let hi_is_eq = get_unique_holder();
                             let lo_is_gt = get_unique_holder();
