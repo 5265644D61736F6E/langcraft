@@ -5109,7 +5109,15 @@ pub fn compile_instr(
                             let lo_is_gt = get_unique_holder();
 
                             cmds.extend(compile_unsigned_cmp(target_hi.clone(), source_hi.clone(), hi_is_gt.clone(), cir::Relation::GreaterThan));
-                            cmds.extend(compile_unsigned_cmp(target_lo, source_lo, lo_is_gt.clone(), cir::Relation::GreaterThan));
+                            cmds.extend(compile_unsigned_cmp(target_lo, source_lo, lo_is_gt.clone(),
+                                if *predicate == IntPredicate::UGT {
+                                    cir::Relation::GreaterThan
+                                } else if *predicate == IntPredicate::UGE {
+                                    cir::Relation::GreaterThanEq
+                                } else {
+                                    unreachable!("64-bit compare `{:?}` is not UGT or UGE",predicate)
+                                }
+                            ));
                             cmds.push(compile_signed_cmp(target_hi, source_hi, hi_is_eq.clone(), cir::Relation::Eq, true));
 
                             cmds.push(assign_lit(dest.clone(), 0));
@@ -5137,13 +5145,21 @@ pub fn compile_instr(
                             lo_gt_check.with_run(assign_lit(dest, 1));
                             cmds.push(lo_gt_check.into());
                         }
-                        IntPredicate::ULT => {
+                        IntPredicate::ULT | IntPredicate::ULE => {
                             let hi_is_lt = get_unique_holder();
                             let hi_is_eq = get_unique_holder();
                             let lo_is_lt = get_unique_holder();
 
                             cmds.extend(compile_unsigned_cmp(target_hi.clone(), source_hi.clone(), hi_is_lt.clone(), cir::Relation::LessThan));
-                            cmds.extend(compile_unsigned_cmp(target_lo, source_lo, lo_is_lt.clone(), cir::Relation::LessThan));
+                            cmds.extend(compile_unsigned_cmp(target_lo, source_lo, lo_is_lt.clone(),
+                                if *predicate == IntPredicate::ULT {
+                                    cir::Relation::LessThan
+                                } else if *predicate == IntPredicate::ULE {
+                                    cir::Relation::LessThanEq
+                                } else {
+                                    unreachable!("64-bit compare `{:?}` is not ULT or ULE",predicate)
+                                }
+                            ));
                             cmds.push(compile_signed_cmp(target_hi, source_hi, hi_is_eq.clone(), cir::Relation::Eq, true));
 
                             cmds.push(assign_lit(dest.clone(), 0));
@@ -5173,7 +5189,7 @@ pub fn compile_instr(
                         }
                         p => {
                             dumploc(debugloc);
-                            eprintln!("[ERR] Signed 64-bit comparisons are unimplemented");
+                            eprintln!("[ERR] Signed 64-bit comparisons ({:?}) are unimplemented",predicate);
                         },
                     }
 
@@ -6473,7 +6489,7 @@ pub fn eval_constant(
                         val0 as u8, val1 as u8, val2 as u8, val3 as u8,
                     ]))
                 } else {
-                    eprintln!("[ERR] 8-bit vector only supported with 4 elements");
+                    eprintln!("[ERR] 8-bit vector not supported with {} elements",as_8.len());
                     MaybeConst::Const(0)
                 }
             } else if let Some(as_32) = as_32 {
