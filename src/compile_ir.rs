@@ -2203,7 +2203,6 @@ fn compile_ashr(
         // TODO take advantage of the given constant
         let mut dest = ScoreHolder::from_local_name(dest.clone(), 8).into_iter();
 
-        cmds.extend(tmp);
         cmds.push(assign(param(0, 0), op0[0].clone()));
         cmds.push(assign(param(0, 1), op0[1].clone()));
         cmds.push(assign_lit(param(1, 0), value as i32));
