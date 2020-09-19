@@ -5635,6 +5635,22 @@ pub fn compile_instr(
                     cmds.push(exec.into());
 
                     cmds
+                } else if matches!(&*operand.get_type(tys), Type::IntegerType { bits: 1 }) {
+                    let cond = ExecuteCondition::Score {
+                        target: op.into(),
+                        target_obj: OBJECTIVE.into(),
+                        kind: ExecuteCondKind::Matches((1..=1).into()),
+                    };
+                    
+                    cmds.push(assign_lit(dest[0], 0));
+
+                    let mut on_one = Execute::new();
+                    on_one.with_if(cond.clone());
+                    on_one.with_run(assign_lit(dest[0].clone(), 0xFFFF_FFFF_u32 as i32));
+                    cmds.push(on_one.into());
+                    cmds.push(assign(dest[1],dest[0]));
+
+                    cmds
                 } else {
                     todo!("{:?}", operand)
                 }
