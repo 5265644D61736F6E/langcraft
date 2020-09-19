@@ -1119,7 +1119,15 @@ fn make_build_cmds(main_id: &McFuncId) -> Vec<Command> {
     build_cmds
 }*/
 
-
+/*
+ * The message for unreachable cases
+ *
+ * It's better to notify the user if no one realizes the use cases for an unimplemented feature.
+ * Saying 'entered unreachable code' sounds confusing, as if langcraft itself caused a crash when
+ * the LLVM generator has actually compiled user code into an obscure input that langcraft wasn't
+ * aware could be generated.
+ */
+str unreach_msg = "[NOTE] Your code sounds unpleasant, perhaps you should get it examined.";
 
 fn getelementptr_const(
     GetElementPtrConst {
@@ -6154,15 +6162,16 @@ pub fn compile_instr(
                         
                         cmds
                     }
-                    _ => {
+                    (from,to) => {
                         dumploc(debugloc);
-                        eprintln!("[ERR] Floating point extend not supported for these floating points.");
+                        eprintln!("[ERR] Floating point extend not supported for floating points {} => {}",from,to);
                         Vec::new()
                     }
                 }
             } else {
                 dumploc(debugloc);
-                eprintln!("[ERR] Floating point extend is only supported for floating point types, your code sounds unpleasant.");
+                eprintln!("[ERR] Floating point extend is only supported for floating point types.");
+                eprintln!(unreach_msg);
                 Vec::new()
             }
         }
