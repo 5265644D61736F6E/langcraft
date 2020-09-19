@@ -4407,8 +4407,20 @@ fn compile_getelementptr(
                             for _ in 0..elem_size {
                                 cmds.push(make_op(dest.clone(), "+=", b.clone()));
                             }
+                        } else if b.len() == 2 {
+                            let dest = ScoreHolder::from_local_name(dest_all.clone(), 8);
+                            let mut b = b.into_iter();
+                            
+                            let (dest_lo, dest_hi) = (dest[0].clone(),dest[1].clone());
+                            let b_lo = b.next().unwrap();
+                            let b_hi = b.next().unwrap();
+
+                            cmds.extend(a);
+                            for _ in 0..pointee_size {
+                                cmds.extend(add_64_bit(dest_lo.clone(),dest_hi.clone(),b_lo.clone(),b_hi.clone(),dest_all.clone()));
+                            }
                         } else {
-                            eprintln!("[ERR] The index of an array can only be word-sized (32-bit)");
+                            eprintln!("[ERR] The index of an array can only be word-sized (32-bit) or doubleword-sized (64-bit)");
                         }
                     }
                 }
