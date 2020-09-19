@@ -6189,10 +6189,47 @@ pub fn compile_instr(
                 Vec::new()
             }
         }
-        Instruction::UIToFP(llvm_ir::instruction::UIToFP {..}) => {
+        Instruction::UIToFP(llvm_ir::instruction::UIToFP {
+            operand,
+            dest,
+            to_type,
+            debugloc
+        }) => {
             eprintln!("[ERR] Unsigned int to floating point not supported");
-
-            Vec::new()
+            let (mut cmds,oper) = eval_operand(operand,globals,tys);
+            
+            if let Type::FPType(to_len) = &**to_type {
+                match (&*operand.get_type(tys),to_len) {
+                    (Type::IntegerType { bits: 32 },llvm_ir::types::FPType::Single) => {
+                        let dest = ScoreHolder::from_local_name(dest.clone(),4);
+                        
+                        // shift the significand left
+                        cmds.push(assign(param(0,0),oper[0].clone()));
+                        cmds.push(
+                            McFuncCall {
+                                id: McFuncId::new("intrinsic:utof"),
+                            }
+                            .into(),
+                        );
+                        cmds.push(assign(dest[0].clone(),param(0,0)));
+                        
+                        cmds
+                    }
+                    (Type::IntegerType { bits },llvm_ir::types::FPType::Single) => {
+                        eprintln!("[ERR] Unsigned integer to floating point is not supported for {}-bit integer types.",bits);
+                        Vec::new()
+                    }
+                    (_,_) => {
+                        eprintln!("[ERR] Unsigned integer to floating point is only supported for 32-bit integer types.");
+                        Vec::new()
+                    }
+                }
+            } else {
+                dumploc(debugloc);
+                eprintln!("[ERR] Unsigned integer to floating point is only supported for floating point types.");
+                eprintln!("{}",unreach_msg);
+                Vec::new()
+            }
         }
         Instruction::SIToFP(llvm_ir::instruction::SIToFP {..}) => {
             eprintln!("[ERR] Signed int to floating point not supported");
