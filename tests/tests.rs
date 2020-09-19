@@ -94,3 +94,9 @@ pub fn float_const() {
     let interp = compile_and_run(Path::new("./tests/float_const.bc"));
     assert_eq!(interp.output, vec!["1056964608"]);
 }
+
+#[test]
+pub fn float_ext() {
+    let interp = compile_and_run(Path::new("./tests/float_ext.bc"));
+    assert_eq!(interp.output, vec!["0","1072168960","-536870912","1073741823","0","-1075314688","-536870912","-1073741825"]);
+}

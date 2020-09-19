@@ -6124,10 +6124,47 @@ pub fn compile_instr(
 
             Vec::new()
         }
-        Instruction::FPExt(llvm_ir::instruction::FPExt {..}) => {
-            eprintln!("[ERR] Floating point extend not supported");
-
-            Vec::new()
+        Instruction::FPExt(llvm_ir::instruction::FPExt {
+            operand,
+            to_type,
+            dest,
+            debugloc
+        }) => {
+            let (mut cmds,oper) = eval_operand(operand,globals,tys);
+            
+            // TODO generalize this
+            if let (llvm_ir::Type::FPType(from_len),llvm_ir::Type::FPType(to_len)) = (&*operand.get_type(tys),&**to_type) {
+                match (from_len,to_len) {
+                    (llvm_ir::types::FPType::Single,llvm_ir::types::FPType::Double) => {
+                        let dest = ScoreHolder::from_local_name(dest.clone(),8);
+                        
+                        dumploc(debugloc);
+                        eprintln!("[ERR] Floating point extend not supported for single -> double.");
+                        
+                        // shift the significand left
+                        cmds.push(assign(param(0,0),oper[0].clone()));
+                        cmds.push(
+                            McFuncCall {
+                                id: McFuncId::new("intrinsic:fext/stod"),
+                            }
+                            .into(),
+                        );
+                        cmds.push(assign(dest[0].clone(),param(0,0)));
+                        cmds.push(assign(dest[1].clone(),param(0,1)));
+                        
+                        cmds
+                    }
+                    _ => {
+                        dumploc(debugloc);
+                        eprintln!("[ERR] Floating point extend not supported for these floating points.");
+                        Vec::new()
+                    }
+                }
+            } else {
+                dumploc(debugloc);
+                eprintln!("[ERR] Floating point extend is only supported for floating point types, your code sounds unpleasant.");
+                Vec::new()
+            }
         }
         Instruction::UIToFP(llvm_ir::instruction::UIToFP {..}) => {
             eprintln!("[ERR] Unsigned int to floating point not supported");
