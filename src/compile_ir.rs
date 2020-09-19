@@ -4416,7 +4416,7 @@ fn compile_getelementptr(
                             let b_hi = b.next().unwrap();
 
                             cmds.extend(a);
-                            for _ in 0..pointee_size {
+                            for _ in 0..elem_size {
                                 cmds.extend(add_64_bit(dest_lo.clone(),dest_hi.clone(),b_lo.clone(),b_hi.clone(),dest_all.clone()));
                             }
                         } else {
