@@ -4396,12 +4396,15 @@ fn compile_getelementptr(
                         offset += c * elem_size as i32;
                     }
                     MaybeConst::NonConst(a, b) => {
-                        assert_eq!(b.len(), 1);
-                        let b = b.into_iter().next().unwrap();
+                        if b.len() == 1 {
+                            let b = b.into_iter().next().unwrap();
 
-                        cmds.extend(a);
-                        for _ in 0..elem_size {
-                            cmds.push(make_op(dest.clone(), "+=", b.clone()));
+                            cmds.extend(a);
+                            for _ in 0..elem_size {
+                                cmds.push(make_op(dest.clone(), "+=", b.clone()));
+                            }
+                        } else {
+                            eprintln!("[ERR] The index of an array can only be word-sized (32-bit)");
                         }
                     }
                 }
