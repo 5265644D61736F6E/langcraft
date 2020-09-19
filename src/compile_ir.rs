@@ -4003,7 +4003,7 @@ pub fn type_layout(ty: &Type, tys: &Types) -> Layout {
                 llvm_ir::types::FPType::Single => Layout::from_size_align(4,4).unwrap(),
                 llvm_ir::types::FPType::Double => Layout::from_size_align(8,4).unwrap(),
                 llvm_ir::types::FPType::FP128 => Layout::from_size_align(16,4).unwrap(),
-                llvm_ir::types::FPType::X86_FP80 => Layout::from_size_align(10,4).unwrap(),
+                llvm_ir::types::FPType::X86_FP80 => Layout::from_size_align(12,4).unwrap(),
                 llvm_ir::types::FPType::PPC_FP128 => Layout::from_size_align(16,4).unwrap(),
             }
             
@@ -5643,13 +5643,13 @@ pub fn compile_instr(
                         kind: ExecuteCondKind::Matches((1..=1).into()),
                     };
                     
-                    cmds.push(assign_lit(dest[0], 0));
+                    cmds.push(assign_lit(dest[0].clone(), 0));
 
                     let mut on_one = Execute::new();
                     on_one.with_if(cond.clone());
                     on_one.with_run(assign_lit(dest[0].clone(), 0xFFFF_FFFF_u32 as i32));
                     cmds.push(on_one.into());
-                    cmds.push(assign(dest[1],dest[0]));
+                    cmds.push(assign(dest[1].clone(),dest[0].clone()));
 
                     cmds
                 } else {
