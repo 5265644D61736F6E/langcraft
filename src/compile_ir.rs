@@ -1201,8 +1201,15 @@ fn getelementptr_const(
                     ty = element_type;
                     offset += elem_size as u32 * index as u32;
                 }
-                Type::PointerType { .. } => {
-                    eprintln!("[ERR] Constant pointer GetElementPtr is not implemented.");
+                Type::PointerType { pointee_type, addr_space } => {
+                    if addr_space == 0 {
+                        let elem_size = type_layout(&pointee_type, tys).pad_to_align().size();
+
+                        ty = pointee_type;
+                        offset += elem_size as u32 * index as u32;
+                    } else {
+                        eprintln!("[ERR] GetElementPtr on a pointer with a non-zero address space is unsupported");
+                    }
                 }
                 _ => todo!("{:?}", ty),
             }
