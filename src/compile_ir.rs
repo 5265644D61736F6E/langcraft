@@ -6048,7 +6048,8 @@ pub fn compile_instr(
                         }
                     }
                 }
-                _ => eprintln!("[ERR] ShuffleVector is only implemented for 32 and 1 bit integers"),
+                Type::IntegerType { bits } => eprintln!("[ERR] ShuffleVector is not implemented for {}-bit integers",bits),
+                _ => eprintln!("[ERR] ShuffleVector is only implemented for integers"),
             }
 
             cmds
