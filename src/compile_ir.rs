@@ -6064,6 +6064,48 @@ pub fn compile_instr(
                         }
                     }
                 }
+                // This does deal with signs, do not use with 8 bits!
+                Type::IntegerType { bits: 1 } => {
+                    if mask_vals.len() != 4 {
+                        todo!()
+                    }
+
+                    for dest_word in dest.clone().into_iter() {
+                        assign_lit(dest_word.clone(), 0);
+                    }
+
+                    let dest_byte = get_unique_holder();
+                    for (dest_byte_idx, mask_idx) in mask_vals.into_iter().enumerate() {
+                        match &*mask_idx {
+                            Constant::Undef(_) => {}
+                            Constant::Int { bits: 32, value } => {
+                                let value = *value as usize;
+
+                                if op0_len != 4 {
+                                    todo!()
+                                }
+
+                                let (source, byte_idx) = if value > op0_len {
+                                    let value = value - op0_len;
+                                    (&op1[value / 4], value % 4)
+                                } else {
+                                    (&op0[value / 4], value % 4)
+                                };
+
+                                cmds.push(assign(dest_byte.clone(), source.clone()));
+                                cmds.push(make_op_lit(dest_byte.clone(), "/=", byte_idx as i32));
+                                cmds.push(make_op_lit(dest_byte.clone(), "%=", 256));
+                                cmds.push(make_op_lit(
+                                    dest_byte.clone(),
+                                    "*=",
+                                    1 << (8 * (dest_byte_idx % 4)),
+                                ));
+                                cmds.push(make_op(dest[dest_byte_idx].clone(), "+=", dest_byte.clone()));
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                }
                 Type::IntegerType { bits } => eprintln!("[ERR] ShuffleVector is not implemented for {}-bit integers",bits),
                 _ => eprintln!("[ERR] ShuffleVector is only implemented for integers"),
             }
