@@ -6527,6 +6527,24 @@ pub fn eval_constant(
                     MaybeConst::Const(i32::from_le_bytes([
                         val0 as u8, val1 as u8, val2 as u8, val3 as u8,
                     ]))
+                } else if as_8.len() % 4 == 0 {
+                    let num = get_unique_num();
+                    let mut cmds = Vec::new();
+                    let mut holders = Vec::new();
+                    
+                    for i in 0..(as_8.len() / 4) {
+                        if let [val0, val1, val2, val3] = as_8[(i * 4)..(i * 4 + 4)] {
+                            let holder = ScoreHolder::new(format!("%temp{}%{}", num, i)).unwrap();
+                            holders.push(holder.clone());
+                            cmds.push(assign_lit(holder, i32::from_le_bytes([
+                                val0 as u8, val1 as u8, val2 as u8, val3 as u8,
+                            ])));
+                        } else {
+                            unreachable!()
+                        }
+                    }
+
+                    MaybeConst::NonConst(cmds, holders)
                 } else {
                     eprintln!("[ERR] 8-bit vector not supported with {} elements",as_8.len());
                     MaybeConst::Const(0)
