@@ -1201,6 +1201,9 @@ fn getelementptr_const(
                     ty = element_type;
                     offset += elem_size as u32 * index as u32;
                 }
+                Type::PointerType { .. } => {
+                    eprintln!("[ERR] Constant pointer GetElementPtr is not implemented.");
+                }
                 _ => todo!("{:?}", ty),
             }
         }
@@ -6479,8 +6482,8 @@ pub fn eval_constant(
             let as_8 = elems
                 .iter()
                 .map(|e| {
-                    if e.get_type(tys) == tys.i8() {
-                        if let Constant::Int { bits: 8, value } = &**e {
+                    if e.get_type(tys) == tys.i8() || (Type::IntegerType { bits: 1 }) == *e.get_type(tys) {
+                        if let Constant::Int { bits, value } = &**e {
                             Some(*value as u8)
                         } else {
                             todo!()
