@@ -1145,7 +1145,21 @@ fn getelementptr_const(
     println!("Address: {:?}", address);
     println!("Indices: {:?}", indices);
 
-    let result = if let Constant::GlobalReference { name, ty } = &**address {
+    let result = {
+        let (name, ty) = if let Constant::GlobalReference { name, ty } = &**address {
+            (name, ty)
+        } else if let Constant::BitCast(llvm_ir::constant::BitCast { operand, to_type }) = &**address {
+            if let Constant::GlobalReference { name, ty: _ } = &**operand {
+                (name, to_type)
+            } else {
+                eprintln!("[ERR] BitCasts to {:?} are unimplemented for getelementptr", operand);
+                return 0;
+            }
+        } else {
+            eprintln!("[ERR] {:?} is unimplemented for getelementptr", address);
+            return 0;
+        };
+        
         let mut offset = globals
             .get(&name)
             .unwrap_or_else(|| {eprintln!("couldn't find global {:?}", name); &(0,None)})
@@ -1194,14 +1208,6 @@ fn getelementptr_const(
         println!("next type would be {:?}", ty);
 
         offset
-    } else if let Constant::BitCast(llvm_ir::constant::BitCast { operand, to_type }) = &**address {
-        eprintln!("[ERR] BitCasts are unimplemented for getelementptr");
-        
-        0
-    } else {
-        eprintln!("[ERR] {:?} is unimplemented for getelementptr", address);
-
-        0
     };
 
     println!("Result: {:?}", result);
