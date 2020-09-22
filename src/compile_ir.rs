@@ -6547,6 +6547,7 @@ pub fn eval_constant(
             }
         }
         Constant::BitCast(bitcast) => eval_constant(&bitcast.operand, globals, tys),
+        Constant::IntToPtr(cast) => eval_constant(&cast.operand, globals, tys),
         Constant::Undef(ty) => {
             // TODO: This can literally be *anything* you want it to be
 
