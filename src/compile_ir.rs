@@ -6162,7 +6162,11 @@ pub fn compile_instr(
 
             if !matches!(&*element_type, Type::IntegerType { bits: 32 }) {
                 dumploc(debugloc);
-                eprintln!("[ERR] InsertElement is only supported for 32-bit integers");
+                if let Type::IntegerType { bits } = &*element_type {
+                    eprintln!("[ERR] InsertElement is not supported for {}-bit integers",bits);
+                } else {
+                    eprintln!("[ERR] InsertElement is only supported for integers");
+                }
             }
 
             let dest =
@@ -6175,7 +6179,7 @@ pub fn compile_instr(
 
             if elem.len() != 1 {
                 dumploc(debugloc);
-                eprintln!("[ERR] InsertElement is only supported for 32-bit integers");
+                eprintln!("[ERR] InsertElement is not supported for {}-bit integers",elem.len() * 32);
             }
             
             let elem = elem.into_iter().next().unwrap();
