@@ -5411,6 +5411,55 @@ pub fn compile_instr(
 
                                 cmds.push(out_command.into());
                             }
+                        } else if target.len() == 1 && source.len() == 2 {
+                            match predicate {
+                                IntPredicate::SGT | IntPredicate::SGE => {
+                                    let mut cond = Execute::new();
+                                    cond.with_if(ExecuteCondition::Score {
+                                        target: Target::Uuid(source[1].clone()),
+                                        target_obj: OBJECTIVE.to_string(),
+                                        kind: ExecuteCondKind::Matches((1..).into())
+                                    });
+                                    cond.with_run(assign_lit(dest.clone(),1));
+                                    cmds.push(cond.into());
+                                }
+                                IntPredicate::SLT | IntPredicate::SLE => {
+                                    let mut cond = Execute::new();
+                                    cond.with_if(ExecuteCondition::Score {
+                                        target: Target::Uuid(source[1].clone()),
+                                        target_obj: OBJECTIVE.to_string(),
+                                        kind: ExecuteCondKind::Matches((..=-1).into())
+                                    });
+                                    cond.with_run(assign_lit(dest.clone(),1));
+                                    cmds.push(cond.into());
+                                }
+                                IntPredicate::EQ | IntPredicate::ULE | IntPredicate::ULT => {}
+                                IntPredicate::NE | IntPredicate::UGE | IntPredicate::UGT => {
+                                    let mut cond = Execute::new();
+                                    cond.with_unless(ExecuteCondition::Score {
+                                        target: Target::Uuid(source[1].clone()),
+                                        target_obj: OBJECTIVE.to_string(),
+                                        kind: ExecuteCondKind::Matches((0..=0).into())
+                                    });
+                                    cond.with_run(assign_lit(dest.clone(),1));
+                                    cmds.push(cond.into());
+                                }
+                            };
+
+                            let conditionals = compile_normal_icmp(target[0].clone(),source[0].clone(),predicate,dest);
+
+                            for current_command in conditionals.iter() {
+                                let mut out_command = Execute::new();
+
+                                out_command.with_if(ExecuteCondition::Score {
+                                    target: Target::Uuid(source[1].clone()),
+                                    target_obj: OBJECTIVE.to_string(),
+                                    kind: ExecuteCondKind::Matches((0..=0).into())
+                                });
+                                out_command.with_run::<cir::Command>(current_command.clone());
+
+                                cmds.push(out_command.into());
+                            }
                         } else {
                             println!("Target len is {}, source len is {} and ty is {:?} and predicate is {:?}",target.len(),source.len(), ty, predicate);
                             todo!()
