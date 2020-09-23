@@ -6274,13 +6274,9 @@ pub fn compile_instr(
                 unreachable!()
             };
 
-            if !matches!(&*element_type, Type::IntegerType { bits: 32 }) {
+            if !matches!(&*element_type, Type::IntegerType { bits: _ }) {
                 dumploc(debugloc);
-                if let Type::IntegerType { bits } = &*element_type {
-                    eprintln!("[ERR] InsertElement is not supported for {}-bit integers",bits);
-                } else {
-                    eprintln!("[ERR] InsertElement is only supported for integers");
-                }
+                eprintln!("[ERR] InsertElement is only supported for integers");
             }
 
             let dest =
@@ -6291,23 +6287,33 @@ pub fn compile_instr(
             let (tmp, elem) = eval_operand(element, globals, tys);
             cmds.extend(tmp);
 
-            if elem.len() != 1 {
-                dumploc(debugloc);
-                eprintln!("[ERR] InsertElement is not supported for {}-bit integers",elem.len() * 32);
-            }
-            
-            let elem = elem.into_iter().next().unwrap();
-
             match eval_maybe_const(index, globals, tys) {
                 MaybeConst::Const(c) => {
-                    for (word_idx, (src_word, dest_word)) in
-                        vec.into_iter().zip(dest.into_iter()).enumerate()
-                    {
-                        if word_idx == c as usize {
-                            cmds.push(assign(dest_word, elem.clone()))
-                        } else {
-                            cmds.push(assign(dest_word, src_word));
+                    if elem.len() == 1 {
+                        for (word_idx, (src_word, dest_word)) in
+                            vec.into_iter().zip(dest.into_iter()).enumerate()
+                        {
+                            if word_idx == c as usize {
+                                cmds.push(assign(dest_word, elem[0].clone()))
+                            } else {
+                                cmds.push(assign(dest_word, src_word));
+                            }
                         }
+                    } else if elem.len() == 2 {
+                        for (word_idx, (src_word, dest_word)) in
+                            vec.into_iter().zip(dest.into_iter()).enumerate()
+                        {
+                            if word_idx == (c * 2) as usize {
+                                cmds.push(assign(dest_word, elem[0].clone()))
+                            } else if word_idx == (c * 2 + 1) as usize {
+                                cmds.push(assign(dest_word, elem[0].clone()))
+                            } else {
+                                cmds.push(assign(dest_word, src_word));
+                            }
+                        }
+                    } else {
+                        dumploc(debugloc);
+                        eprintln!("[ERR] InsertElement is not supported for {}-bit integers",elem.len() * 32);
                     }
                 }
                 MaybeConst::NonConst(_, _) => todo!("{:?}", index),
