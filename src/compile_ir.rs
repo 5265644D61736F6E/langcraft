@@ -6395,6 +6395,52 @@ pub fn compile_instr(
                     
                     // the pointer was already set so this needs no setup
                     cmds.push(write_ptr(modval));
+                } else if let Type::IntegerType { bits: 64 } = &**pointee_type {
+                    let old = ScoreHolder::from_local_name(dest.clone(), 8);
+
+                    let modval0 = get_unique_holder();
+                    let modval1 = get_unique_holder();
+                    
+                    // low word
+                    cmds.push(assign(ptr(), op0p[0].clone()));
+                    cmds.push(
+                        McFuncCall {
+                            id: McFuncId::new("intrinsic:setptr"),
+                        }
+                        .into(),
+                    );
+                    cmds.push(read_ptr(old[0].clone()));
+                    
+                    // high word
+                    cmds.push(make_op_lit(ptr(), "-=", 4));
+                    cmds.push(
+                        McFuncCall {
+                            id: McFuncId::new("intrinsic:setptr"),
+                        }
+                        .into(),
+                    );
+                    cmds.push(read_ptr(old[1].clone()));
+
+                    if *operation == llvm_ir::instruction::RMWBinOp::Xchg {
+                        cmds.push(assign(modval0.clone(),op1[0].clone()));
+                        cmds.push(assign(modval1.clone(),op1[0].clone()));
+                    } else {
+                        dumploc(debugloc);
+                        eprintln!("[ERR] AtomicRMW operation {:?} not supported",operation);
+                    }
+                    
+                    // high word
+                    cmds.push(write_ptr(modval1));
+                    
+                    // low word
+                    cmds.push(make_op_lit(ptr(), "-=", 4));
+                    cmds.push(
+                        McFuncCall {
+                            id: McFuncId::new("intrinsic:setptr"),
+                        }
+                        .into(),
+                    );
+                    cmds.push(write_ptr(modval0));
                 } else if let Type::IntegerType { bits } = &**pointee_type {
                     dumploc(debugloc);
                     eprintln!("[ERR] AtomicRMW not supported for integers with {} bits",bits);
