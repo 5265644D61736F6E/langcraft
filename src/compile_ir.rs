@@ -6355,8 +6355,58 @@ pub fn compile_instr(
 
             Vec::new()
         }
-        Instruction::AtomicRMW(llvm_ir::instruction::AtomicRMW {..}) => {
-            eprintln!("[ERR] AtomicRMW not supported");
+        Instruction::AtomicRMW(llvm_ir::instruction::AtomicRMW {
+            operation,
+            address,
+            value,
+            dest,
+            volatile: _,
+            atomicity: _,
+            debugloc
+        }) => {
+            let (mut cmds,op0p) = eval_operand(address,globals,tys);
+            let (op1_cmds,op1) = eval_operand(value,globals,tys);
+            cmds.extend(op1_cmds);
+            
+            if let Type::PointerType { pointee_type, addr_space: _ } = &*address.get_type(tys) {
+                cmds.push(assign(ptr(), op0p[0].clone()));
+                cmds.push(
+                    McFuncCall {
+                        id: McFuncId::new("intrinsic:setptr"),
+                    }
+                    .into(),
+                );
+                
+                if let Type::IntegerType { bits: 32 } = &**pointee_type {
+                    let old = ScoreHolder::from_local_name(dest.clone(), 4);
+                    let old = old[0].clone();
+            
+                    let modval = get_unique_holder();
+                    
+                    cmds.push(read_ptr(old.clone()));
+
+                    if *operation == llvm_ir::instruction::RMWBinOp::Add {
+                        cmds.push(assign(modval.clone(),old));
+                        cmds.push(make_op(modval.clone(),"+=",op1[0].clone()));
+                    } else {
+                        dumploc(debugloc);
+                        eprintln!("[ERR] AtomicRMW operation {:?} not supported",operation);
+                    }
+                    
+                    // the pointer was already set so this needs no setup
+                    cmds.push(write_ptr(modval));
+                } else if let Type::IntegerType { bits } = &**pointee_type {
+                    dumploc(debugloc);
+                    eprintln!("[ERR] AtomicRMW not supported for integers with {} bits",bits);
+                } else {
+                    dumploc(debugloc);
+                    eprintln!("[ERR] AtomicRMW only supported for integers");
+                }
+            } else {
+                dumploc(debugloc);
+                eprintln!("[ERR] The address operand in AtomicRMW needs to be a pointer.");
+                eprintln!("{}",unreach_msg);
+            }
 
             Vec::new()
         }
