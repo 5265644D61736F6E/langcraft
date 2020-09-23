@@ -6402,17 +6402,10 @@ pub fn compile_instr(
                     let modval1 = get_unique_holder();
                     
                     // low word
-                    cmds.push(assign(ptr(), op0p[0].clone()));
-                    cmds.push(
-                        McFuncCall {
-                            id: McFuncId::new("intrinsic:setptr"),
-                        }
-                        .into(),
-                    );
                     cmds.push(read_ptr(old[0].clone()));
                     
                     // high word
-                    cmds.push(make_op_lit(ptr(), "-=", 4));
+                    cmds.push(make_op_lit(ptr(), "+=", 4));
                     cmds.push(
                         McFuncCall {
                             id: McFuncId::new("intrinsic:setptr"),
