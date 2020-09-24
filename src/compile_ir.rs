@@ -1845,8 +1845,12 @@ fn setup_var_arguments(
             MaybeConst::NonConst(cmds, source) => {
                 before_cmds.extend(cmds);
 
-                for source_word in source.into_iter() {
+                for source_word in source.clone().into_iter() {
                     before_cmds.extend(push(source_word));
+                }
+                
+                if source.len() % 2 > 0 {
+                    before_cmds.push(make_op_lit(stackptr(), "+=", 4));
                 }
             }
         }
