@@ -164,6 +164,10 @@ pub fn pop_cond_stack(target: ScoreHolder) -> Vec<Command> {
     cmds
 }
 
+pub fn argptr() -> ScoreHolder {
+    ScoreHolder::new("%argptr".to_string()).unwrap()
+}
+
 pub fn stackptr() -> ScoreHolder {
     ScoreHolder::new("%stackptr".to_string()).unwrap()
 }
@@ -719,6 +723,7 @@ pub fn compile_module(module: &Module, options: &BuildOptions) -> Vec<McFunction
     init_cmds.push(set_memory(-1, main_return as i32));
     init_cmds.push(assign_lit(stackptr(), alloc.reserve(4) as i32));
     init_cmds.push(assign_lit(stackbaseptr(), 0));
+    init_cmds.push(assign_lit(argptr(), 0));
     init_cmds.extend(make_build_cmds(func_starts.get("main").unwrap()));
 
     let mut all_clobbers = BTreeSet::new();
@@ -1805,6 +1810,51 @@ fn setup_arguments(
     before_cmds
 }
 
+/*
+ * Setup arguments for va_args calls
+ */
+fn setup_var_arguments(
+    arguments: &[(Operand, Vec<ParameterAttribute>)],
+    globals: &HashMap<&Name, (u32, Option<Constant>)>,
+    tys: &Types,
+) -> Vec<Command> {
+    let mut before_cmds = Vec::new();
+
+    // Set arguments
+    for (arg, _attrs) in arguments.iter() {
+        match eval_maybe_const(arg, globals, tys) {
+            MaybeConst::Const(score) => {
+                before_cmds.push(assign(ptr(), stackptr()));
+                before_cmds.push(
+                    McFuncCall {
+                        id: McFuncId::new("intrinsic:setptr"),
+                    }
+                    .into(),
+                );
+                before_cmds.push(write_ptr_const(score));
+                before_cmds.push(make_op_lit(ptr(), "+=", 4));
+                before_cmds.push(
+                    McFuncCall {
+                        id: McFuncId::new("intrinsic:setptr"),
+                    }
+                    .into(),
+                );
+                before_cmds.push(write_ptr_const(0));
+                before_cmds.push(make_op_lit(stackptr(), "+=", 8));
+            }
+            MaybeConst::NonConst(cmds, source) => {
+                before_cmds.extend(cmds);
+
+                for source_word in source.into_iter() {
+                    before_cmds.extend(push(source_word));
+                }
+            }
+        }
+    }
+
+    before_cmds
+}
+
 fn compile_xor(
     Xor {
         operand0,
@@ -2302,9 +2352,12 @@ fn compile_call(
         Either::Right(operand) => operand,
     };
 
+    let mut call_var_arg = false;
+
     let static_call = if let Operand::ConstantOperand(c) = function {
         if let Constant::GlobalReference { name: Name::Name(name), ty } = &**c {
-            if let Type::FuncType { result_type, is_var_arg: false, .. } = &**ty {
+            if let Type::FuncType { result_type, is_var_arg, .. } = &**ty {
+                call_var_arg = *is_var_arg;
                 Some((name, result_type))
             } else {
                 None
@@ -2316,10 +2369,11 @@ fn compile_call(
             dumploc(debugloc);
 
             if let Constant::GlobalReference { name: Name::Name(name), ty } = &**operand {
-                if let Type::FuncType { result_type: _, is_var_arg: false, .. } = &**ty {
+                if let Type::FuncType { result_type: _, is_var_arg: _, .. } = &**ty {
                     if let Type::PointerType {pointee_type, addr_space: _} = &**to_type {
-                        if let Type::FuncType { result_type, is_var_arg: false, .. } = &**pointee_type {
+                        if let Type::FuncType { result_type, is_var_arg, .. } = &**pointee_type {
                             eprintln!("[WARN] The compilation unit casts a function type to a different function type. Are the declarations different for this function?");
+                            call_var_arg = *is_var_arg;
                             val = Some((name, result_type));
                         } else {
                             eprintln!("[ERR] Cannot call a data pointer unless cast.");
@@ -2898,6 +2952,54 @@ fn compile_call(
                 assert_eq!(dest, None);
                 (vec![], None)
             }
+            "llvm.va_start" => {
+                let mut before_cmds = setup_arguments(arguments, globals, tys);
+                
+                before_cmds.push(assign(ptr(),param(0,0)));
+                
+                // first part of the struct:
+                // gp_offset (used to iterate over the args)
+                // fp_offset
+                before_cmds.push(
+                    McFuncCall {
+                        id: McFuncId::new("intrinsic:setptr")
+                    }
+                    .into());
+                before_cmds.push(write_ptr_const(0));
+                before_cmds.push(make_op_lit(ptr(),"+=",4));
+                before_cmds.push(
+                    McFuncCall {
+                        id: McFuncId::new("intrinsic:setptr")
+                    }
+                    .into());
+                before_cmds.push(write_ptr_const(0));
+                before_cmds.push(make_op_lit(ptr(),"+=",8));
+                
+                // second part of the struct:
+                // overflow_arg_area (usually used after 40 va_args)
+                // reg_save_area
+                before_cmds.push(
+                    McFuncCall {
+                        id: McFuncId::new("intrinsic:setptr")
+                    }
+                    .into());
+                before_cmds.push(write_ptr(argptr()));
+                before_cmds.push(make_op_lit(ptr(),"-=",4));
+                before_cmds.push(
+                    McFuncCall {
+                        id: McFuncId::new("intrinsic:setptr")
+                    }
+                    .into());
+                before_cmds.push(make_op_lit(argptr(),"+=",48));
+                before_cmds.push(write_ptr(argptr()));
+                
+                (before_cmds, None)
+            }
+            "llvm.va_end" => {
+                dumploc(debugloc);
+                eprintln!("[WARN] va_end is useless and does nothing.");
+                (vec![], None)
+            }
             "bcmp" => {
                 assert_eq!(arguments.len(), 3);
 
@@ -2926,15 +3028,25 @@ fn compile_call(
 
                 before_cmds.push(Command::Comment(format!("Calling {}", name)));
 
+                if call_var_arg {
+                    // push the arguments on the stack to allow the callee to index the parameters
+                    before_cmds.extend(push(argptr()));
+                    before_cmds.extend(push(stackbaseptr()));
+                    before_cmds.push(assign(argptr(),stackptr()));
+                    before_cmds.push(assign(stackbaseptr(),stackptr()));
+                    
+                    before_cmds.extend(setup_var_arguments(arguments, globals, tys));
+                } else {
+                    before_cmds.extend(setup_arguments(arguments, globals, tys));
+                }
+
                 // Push return address
                 before_cmds.extend(push(ScoreHolder::new("%%fixup_return_addr".to_string()).unwrap()));
-
-                before_cmds.extend(setup_arguments(arguments, globals, tys));
 
                 // Branch to function
                 before_cmds.push(Command::Comment(format!("!FIXUPCALL {}", name)));
 
-                let after_cmds = if let Some(dest) = dest {
+                let mut after_cmds = if let Some(dest) = dest {
                     dest.into_iter()
                         .enumerate()
                         .map(|(idx, dest)| assign(dest, return_holder(idx)))
@@ -2942,6 +3054,13 @@ fn compile_call(
                 } else {
                     Vec::new()
                 };
+
+                // let the caller restore the pointer to prevent the callee from corrupting the stack
+                if call_var_arg {
+                    after_cmds.push(assign(stackptr(),stackbaseptr()));
+                    after_cmds.extend(pop(stackbaseptr()));
+                    after_cmds.extend(push(argptr()));
+                }
 
                 (before_cmds, Some(after_cmds))
             }
@@ -3235,15 +3354,36 @@ fn reify_block(AbstractBlock { needs_prolog, mut body, term, parent }: AbstractB
     if needs_prolog {
         let mut prolog = save_regs(clobbers.clone());
 
-        for (idx, arg) in parent.parameters.iter().enumerate() {
-            let arg_size = type_layout(&arg.ty, tys).size();
+        if parent.is_var_arg {
+            for (idx, arg) in parent.parameters.iter().enumerate() {
+                let arg_size = type_layout(&arg.ty, tys).size();
 
-            for (arg_word, arg_holder) in
-                ScoreHolder::from_local_name(arg.name.clone(), arg_size)
-                    .into_iter()
-                    .enumerate()
-            {
-                prolog.push(assign(arg_holder, param(idx, arg_word)));
+                for (arg_word, arg_holder) in
+                    ScoreHolder::from_local_name(arg.name.clone(), arg_size)
+                        .into_iter()
+                        .enumerate()
+                {
+                    prolog.push(assign(ptr(),argptr()));
+                    prolog.push(
+                        McFuncCall {
+                            id: McFuncId::new("intrinsic:setptr")
+                        }
+                        .into());
+                    prolog.push(read_ptr(arg_holder.clone()));
+                    prolog.push(make_op_lit(argptr(),"+=",8));
+                }
+            }
+        } else {
+            for (idx, arg) in parent.parameters.iter().enumerate() {
+                let arg_size = type_layout(&arg.ty, tys).size();
+
+                for (arg_word, arg_holder) in
+                    ScoreHolder::from_local_name(arg.name.clone(), arg_size)
+                        .into_iter()
+                        .enumerate()
+                {
+                    prolog.push(assign(arg_holder, param(idx, arg_word)));
+                }
             }
         }
 
@@ -3471,10 +3611,6 @@ fn compile_function<'a>(
     tys: &Types,
     options: &BuildOptions,
 ) -> (Vec<AbstractBlock<'a>>, HashMap<ScoreHolder, cir::HolderUse>) {
-    if func.is_var_arg {
-        eprintln!("[ERR] Functions with variadic arguments have not been implemented yet");
-    }
-
     if func.basic_blocks.is_empty() {
         todo!("functions with no basic blocks");
     }
