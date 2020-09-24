@@ -530,12 +530,10 @@ fn compile_module_abstract<'a>(module: &'a Module, options: &BuildOptions, globa
         .iter()
         .map(|f| (f, compile_function(f, &globals, &module.types, options)))
     {
-        for AbstractBlock { body: McFunction { id, .. }, .. } in mc_funcs.iter() {
-            clobber_list.insert(
-                id.name.clone(),
-                clobbers.clone().into_iter().map(|c| c.0).collect(),
-            );
-        }
+        clobber_list.insert(
+            parent.name.clone(),
+            clobbers.clone().into_iter().map(|c| c.0).collect(),
+        );
 
         func_starts.insert(parent.name.clone(), mc_funcs[0].body.id.clone());
 
@@ -3348,7 +3346,7 @@ pub(crate) fn compile_terminator(
 
 #[allow(clippy::reversed_empty_ranges)]
 fn reify_block(AbstractBlock { needs_prolog, mut body, term, parent }: AbstractBlock, clobber_list: &HashMap<String, BTreeSet<ScoreHolder>>, func_starts: &HashMap<String, McFuncId>, globals: &GlobalVarList, tys: &Types) -> McFunction {
-    let mut clobbers = clobber_list.get(&body.id.name).unwrap().clone();
+    let mut clobbers = clobber_list.get(&parent.name).unwrap().clone();
 
     for arg in parent.parameters.iter() {
         let arg_size = type_layout(&arg.ty, tys).size();
