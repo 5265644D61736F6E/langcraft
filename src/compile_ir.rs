@@ -6878,6 +6878,27 @@ pub fn eval_constant(
 
             MaybeConst::NonConst(cmds, vec![lo_word, hi_word])
         }
+        Constant::Int { bits: 128, value } => {
+            // TODO: I mean it's *const* but not convenient...
+            // See also: <i32 x 2>
+            let num = get_unique_num();
+
+            let words = &[
+                ScoreHolder::new(format!("%temp{}%0", num)).unwrap(),
+                ScoreHolder::new(format!("%temp{}%1", num)).unwrap(),
+                ScoreHolder::new(format!("%temp{}%2", num)).unwrap(),
+                ScoreHolder::new(format!("%temp{}%3", num)).unwrap(),
+            ];
+
+            let cmds = vec![
+                assign_lit(words[0].clone(), 0),
+                assign_lit(words[1].clone(), 0),
+                assign_lit(words[2].clone(), *value as i32),
+                assign_lit(words[3].clone(), (*value >> 32) as i32),
+            ];
+
+            MaybeConst::NonConst(cmds, vec![words[0].clone(),words[1].clone(),words[2].clone(),words[3].clone()])
+        }
         Constant::Struct { values, is_packed: _, name: _ } => {
             if values.iter().all(|v| matches!(&*v.get_type(tys), Type::IntegerType { bits: 32 })) {
                 let (cmds, words) = values
