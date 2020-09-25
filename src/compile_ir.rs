@@ -1328,6 +1328,13 @@ pub fn make_zeroed(ty: &Type, tys: &Types) -> Constant {
             bits: *bits,
             value: 0,
         },
+        Type::PointerType { .. } => {
+            eprintln!("[ERR] Zero-initialized pointer is not supported");
+            Constant::Int {
+                bits: 32,
+                value: 0,
+            }
+        }
         _ => todo!("{:?}", ty),
     }
 }
@@ -4019,9 +4026,9 @@ pub fn compile_arithmetic(
             assert_eq!(source1.len(), *num_elements);
             assert_eq!(dest.len(), *num_elements);
         } else {
-            assert_eq!(source0.len(), 1, "{:?}", kind);
-            assert_eq!(source1.len(), 1);
-            assert_eq!(dest.len(), 1);
+            if source0.len() != 1 || source0.len() != 1 || source0.len() != 1 {
+                eprintln!("[ERR] Arithmetic is only supported for doublewords");
+            }
         };
 
         for (source0, (source1, dest)) in source0
@@ -4128,6 +4135,7 @@ pub fn type_layout(ty: &Type, tys: &Types) -> Layout {
         Type::IntegerType { bits: 32 } => Layout::from_size_align(4, 4).unwrap(),
         Type::IntegerType { bits: 48 } => Layout::from_size_align(6, 4).unwrap(),
         Type::IntegerType { bits: 64 } => Layout::from_size_align(8, 4).unwrap(),
+        Type::IntegerType { bits: 128 } => Layout::from_size_align(16, 4).unwrap(),
         Type::StructType {
             element_types,
             is_packed,
@@ -4497,7 +4505,7 @@ fn compile_getelementptr(
         indices,
         dest: dest_all,
         in_bounds: _,
-        debugloc: _,
+        debugloc,
     }: &GetElementPtr,
     globals: &GlobalVarList,
     tys: &Types,
@@ -4510,7 +4518,10 @@ fn compile_getelementptr(
 
     let mut cmds = Vec::new();
 
-    assert!(matches!(&*ty, Type::PointerType { .. }));
+    if !matches!(&*ty, Type::PointerType { .. }) {
+        dumploc(debugloc);
+        eprintln!("[WARN] GetElementPtr operand is not a pointer (but it shouldn't need to be???)");
+    }
 
     for index in indices {
         match (*ty).clone() {
@@ -4538,8 +4549,27 @@ fn compile_getelementptr(
                             let b_hi = b.next().unwrap();
 
                             cmds.extend(a);
-                            for _ in 0..pointee_size {
-                                cmds.extend(add_64_bit(dest_lo.clone(),dest_hi.clone(),b_lo.clone(),b_hi.clone(),dest_all.clone()));
+                            
+                            let add_cmds = add_64_bit(dest_lo.clone(),dest_hi.clone(),b_lo.clone(),b_hi.clone(),dest_all.clone());
+                            
+                            // use the least commands
+                            if add_cmds.len() * pointee_size < 5 + add_cmds.len() {
+                                // unlikely
+                                for _ in 0..pointee_size {
+                                    cmds.extend(add_cmds.clone());
+                                }
+                            } else {
+                                // add constant to 64-bit integer
+                                cmds.extend(vec![
+                                    assign_lit(param(1,0), pointee_size as i32),
+                                    assign(param(0,0), b_lo.clone()),
+                                    assign(param(0,1), b_hi.clone()),
+                                    make_op(param(0,0), "*=", param(1,0)),
+                                    make_op(param(0,1), "*=", param(1,0)),
+                                ]);
+                                
+                                let add_cmds = add_64_bit(dest_lo.clone(),dest_hi.clone(),param(0,0),param(0,1),dest_all.clone());
+                                cmds.extend(add_cmds);
                             }
                         } else {
                             eprintln!("[ERR] b can only be word-sized (32-bit) or doubleword-sized (64-bit)");
@@ -4608,6 +4638,10 @@ fn compile_getelementptr(
 
                 ty = element_type;
             }
+            Type::VectorType { .. } => {
+                dumploc(debugloc);
+                eprintln!("[WARN] GetElementPtr for a vector is unsupported");
+            }
             _ => todo!("{:?}", ty),
         }
     }
@@ -4615,19 +4649,24 @@ fn compile_getelementptr(
     let mut start_cmds = match eval_maybe_const(address, globals, tys) {
         MaybeConst::Const(addr) => vec![assign_lit(dest.clone(), addr + offset as i32)],
         MaybeConst::NonConst(mut cmds, addr) => {
-            assert_eq!(addr.len(), 1);
-            let addr = addr.into_iter().next().unwrap();
+            if addr.len() == 1 {
+                let addr = addr.into_iter().next().unwrap();
 
-            cmds.push(assign(dest.clone(), addr));
-            cmds.push(
-                ScoreAdd {
-                    target: dest.clone().into(),
-                    target_obj: OBJECTIVE.into(),
-                    score: offset as i32,
-                }
-                .into(),
-            );
-            cmds
+                cmds.push(assign(dest.clone(), addr));
+                cmds.push(
+                    ScoreAdd {
+                        target: dest.clone().into(),
+                        target_obj: OBJECTIVE.into(),
+                        score: offset as i32,
+                    }
+                    .into(),
+                );
+                cmds
+            } else {
+                eprintln!("[ERR] GetElementPtr is not supported for {}-bit pointers",addr.len() * 32);
+                
+                cmds
+            }
         }
     };
 
@@ -5599,8 +5638,8 @@ pub fn compile_instr(
                                 cmds.push(out_command.into());
                             }
                         } else {
-                            println!("Target len is {}, source len is {} and ty is {:?} and predicate is {:?}",target.len(),source.len(), ty, predicate);
-                            todo!()
+                            dumploc(debugloc);
+                            eprintln!("[ERR] {}-bit with {}-bit ICMP is unsupported",target.len() * 32,source.len() * 32);
                         }
                     } else {
                         let target = target.into_iter().next().unwrap();
@@ -5689,10 +5728,18 @@ pub fn compile_instr(
             operand,
             to_type,
             dest,
+            debugloc,
             ..
         }) if to_type.as_ref() == &Type::IntegerType { bits: 32 } => {
             if !matches!(&*operand.get_type(tys), Type::IntegerType { bits: 64 }) {
-                todo!("{:?}", operand);
+                // todo!("{:?}", operand);
+                dumploc(debugloc);
+                
+                if let Type::IntegerType { bits } = &*operand.get_type(tys) {
+                    eprintln!("[ERR] Truncate is not correctly supported for {} bits",bits);
+                } else {
+                    eprintln!("[ERR] Truncate is only supported for integers");
+                }
             }
 
             let (mut cmds, op) = eval_operand(operand, globals, tys);
@@ -5707,6 +5754,7 @@ pub fn compile_instr(
             operand,
             to_type,
             dest,
+            debugloc,
             ..
         }) => {
             let (mut cmds, op) = eval_operand(operand, globals, tys);
@@ -5725,11 +5773,12 @@ pub fn compile_instr(
             };
 
             if bits >= 31 {
-                todo!()
+                dumploc(debugloc);
+                eprintln!("[ERR] Truncate is only supported for less than 31 bits");
+            } else {
+                // FIXME: Is this (and the other one) valid?
+                cmds.push(make_op_lit(dest, "%=", 1 << bits));
             }
-
-            // FIXME: Is this (and the other one) valid?
-            cmds.push(make_op_lit(dest, "%=", 1 << bits));
 
             cmds
         }
@@ -5983,14 +6032,20 @@ pub fn compile_instr(
 
                     cmds
                 } else {
-                    todo!("{:?}", operand)
+                    eprintln!("[ERR] Sign extension from {:?} to 64 bits is unimplemented",&*operand.get_type(tys));
+
+                    cmds
                 }
             } else if matches!(&**to_type, Type::VectorType { .. }) {
                 eprintln!("[ERR] Sign extension to vector is unimplemented");
 
                 cmds
+            } else if let Type::IntegerType { bits } = &**to_type {
+                eprintln!("[ERR] Sign extension to {}-bit integer is unimplemented",bits);
+
+                cmds
             } else {
-                eprintln!("[ERR] Sign extension to {:?} is unimplemented", to_type);
+                eprintln!("[ERR] Sign extension to {:?} is unimplemented", &**to_type);
                 
                 cmds
             }
@@ -6474,6 +6529,17 @@ pub fn compile_instr(
 
             Vec::new()
         }
+        Instruction::FPToSI(llvm_ir::instruction::FPToSI {
+            operand: _,
+            to_type: _,
+            dest: _,
+            debugloc
+        }) => {
+            dumploc(debugloc);
+            eprintln!("[ERR] FPtoSI not supported");
+
+            Vec::new()
+        }
         Instruction::FPTrunc(llvm_ir::instruction::FPTrunc {
             operand: _,
             to_type: _,
@@ -6787,7 +6853,8 @@ pub fn eval_constant(
                     .0;
                 MaybeConst::Const(addr as i32)
             } else {
-                todo!("{:?}", operand)
+                eprintln!("[ERR] Pointer {:?} to integer is unsupported",operand);
+                MaybeConst::Const(0)
             }
         }
         Constant::Int { bits: 1, value } => MaybeConst::Const(*value as i32),
@@ -6866,7 +6933,8 @@ pub fn eval_constant(
                     todo!("{:?} {}", element_type, num_elements)
                 }
             } else {
-                todo!("{:?}", t)
+                eprintln!("[ERR] AggregateZero is only implemented for vectors");
+                MaybeConst::Const(0)
             }
         }
         Constant::Vector(elems) => {
@@ -7056,6 +7124,10 @@ pub fn eval_constant(
             }
             
             MaybeConst::Const(val_int)
+        }
+        Constant::Int { bits, value: _ } => {
+            eprintln!("[ERR] Constant {}-bit integer is unsupported",bits);
+            MaybeConst::Const(0)
         }
         _ => {eprintln!("[ERR] Constant {:?} is unsupported", con); MaybeConst::Const(0)},
     }
