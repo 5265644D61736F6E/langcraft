@@ -6087,6 +6087,28 @@ pub fn compile_instr(
                 }
                 
                 cmds
+            } else if let Type::IntegerType { bits: 16 } = &**to_type {
+                let dest = ScoreHolder::from_local_name(dest.clone(), 2);
+                let dest = dest[0].clone();
+                
+                if let Type::IntegerType { bits } = &*operand.get_type(tys) {
+                    cmds.push(assign(dest.clone(), op[0].clone()));
+                    cmds.push(make_op_lit(dest.clone(), "%=", 1 << bits));
+                    let mut exec = Execute::new();
+                    exec.with_if(ExecuteCondition::Score {
+                        target: dest.clone().into(),
+                        target_obj: OBJECTIVE.into(),
+                        kind: ExecuteCondKind::Matches(((1 << (bits % 32 - 1))..=(1 << (bits % 32) - 1)).into()),
+                    });
+                    exec.with_run(make_op_lit(dest.clone(), "+=", -(1 << bits)));
+                    cmds.push(exec.into());
+                } else {
+                    dumploc(debugloc);
+                    eprintln!("[ERR] Cannot convert non-integer to 16-bit integer");
+                    eprintln!("{}",unreach_msg);
+                }
+                
+                cmds
             } else if matches!(&**to_type, Type::VectorType { .. }) {
                 eprintln!("[ERR] Sign extension to vector is unimplemented");
 
