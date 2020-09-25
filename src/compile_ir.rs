@@ -5484,6 +5484,71 @@ pub fn compile_instr(
                             lo_lt_check.with_run(assign_lit(dest, 1));
                             cmds.push(lo_lt_check.into());
                         }
+                        IntPredicate::SLT | IntPredicate::SLE => {
+                            let hi_is_lt = get_unique_holder();
+                            let hi_is_eq = get_unique_holder();
+                            let lo_is_lt = get_unique_holder();
+
+                            cmds.push(compile_signed_cmp(target_hi.clone(), source_hi.clone(), hi_is_lt.clone(), cir::Relation::GreaterThan,true));
+                            cmds.extend(
+                                compile_unsigned_cmp(target_lo.clone(), source_lo.clone(), lo_is_lt.clone(),cir::Relation::GreaterThan)
+                                .into_iter()
+                                .map(|cmd| {
+                                    let mut exec = Execute::new();
+                                    exec.with_unless(ExecuteCondition::Score {
+                                        target: target_hi.clone().into(),
+                                        target_obj: OBJECTIVE.into(),
+                                        kind: ExecuteCondKind::Matches((..=-1).into()),
+                                    });
+                                    exec.with_run(cmd);
+                                    
+                                    Command::Execute(exec)
+                                }));
+                            cmds.extend(
+                                compile_unsigned_cmp(target_lo.clone(), source_lo.clone(), lo_is_lt.clone(),cir::Relation::LessThan)
+                                .into_iter()
+                                .map(|cmd| {
+                                    let mut exec = Execute::new();
+                                    exec.with_if(ExecuteCondition::Score {
+                                        target: target_hi.clone().into(),
+                                        target_obj: OBJECTIVE.into(),
+                                        kind: ExecuteCondKind::Matches((0..).into()),
+                                    });
+                                    exec.with_run(cmd);
+                                    
+                                    Command::Execute(exec)
+                                }));
+                            cmds.push(compile_signed_cmp(target_hi, source_hi, hi_is_eq.clone(), cir::Relation::Eq, true));
+                            
+                            if *predicate == IntPredicate::SLE {
+                                cmds.push(compile_signed_cmp(target_lo, source_lo, lo_is_lt.clone(), cir::Relation::Eq, true));
+                            }
+
+                            cmds.push(assign_lit(dest.clone(), 0));
+                            
+                            let mut hi_lt_check = Execute::new();
+                            hi_lt_check.with_if(ExecuteCondition::Score {
+                                target: hi_is_lt.into(),
+                                target_obj: OBJECTIVE.into(),
+                                kind: ExecuteCondKind::Matches((1..=1).into()),
+                            });
+                            hi_lt_check.with_run(assign_lit(dest.clone(), 1));
+                            cmds.push(hi_lt_check.into());
+
+                            let mut lo_lt_check = Execute::new();
+                            lo_lt_check.with_if(ExecuteCondition::Score {
+                                target: hi_is_eq.into(),
+                                target_obj: OBJECTIVE.into(),
+                                kind: ExecuteCondKind::Matches((1..=1).into()),
+                            });
+                            lo_lt_check.with_if(ExecuteCondition::Score {
+                                target: lo_is_lt.into(),
+                                target_obj: OBJECTIVE.into(),
+                                kind: ExecuteCondKind::Matches((1..=1).into()),
+                            });
+                            lo_lt_check.with_run(assign_lit(dest, 1));
+                            cmds.push(lo_lt_check.into());
+                        }
                         p => {
                             dumploc(debugloc);
                             eprintln!("[ERR] Signed 64-bit comparisons ({:?}) are unimplemented",predicate);
