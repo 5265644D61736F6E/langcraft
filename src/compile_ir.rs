@@ -6015,6 +6015,28 @@ pub fn compile_instr(
                     cmds.push(exec.into());
 
                     cmds
+                } else if matches!(&*operand.get_type(tys), Type::IntegerType { bits: 16 }) {
+                    let op = op.into_iter().next().unwrap();
+                    cmds.push(assign(dest[0].clone(), op));
+                    cmds.push(make_op_lit(dest[0].clone(), "%=", 65536));
+                    let mut exec = Execute::new();
+                    exec.with_if(ExecuteCondition::Score {
+                        target: dest[0].clone().into(),
+                        target_obj: OBJECTIVE.into(),
+                        kind: ExecuteCondKind::Matches((32768..=65535).into()),
+                    });
+                    exec.with_run(make_op_lit(dest[0].clone(), "+=", -65536));
+                    cmds.push(exec.into());
+                    let mut exec = Execute::new();
+                    exec.with_if(ExecuteCondition::Score {
+                        target: dest[0].clone().into(),
+                        target_obj: OBJECTIVE.into(),
+                        kind: ExecuteCondKind::Matches((..=-1).into()),
+                    });
+                    exec.with_run(assign_lit(dest[1].clone(), u32::MAX as i32));
+                    cmds.push(exec.into());
+
+                    cmds
                 } else if matches!(&*operand.get_type(tys), Type::IntegerType { bits: 1 }) {
                     let op = op.into_iter().next().unwrap();
                     let cond = ExecuteCondition::Score {
