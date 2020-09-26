@@ -5992,6 +5992,17 @@ pub fn compile_instr(
                     }
 
                     cmds.push(assign(dest, aggr[offset as usize / 4].clone()))
+                } else if size == 8 {
+                    if dest.len() != 2 {
+                        todo!()
+                    }
+
+                    if offset % 4 != 0 {
+                        todo!()
+                    }
+
+                    cmds.push(assign(dest[0].clone(), aggr[offset as usize / 4].clone()));
+                    cmds.push(assign(dest[1].clone(), aggr[offset as usize / 4 + 1].clone()))
                 } else if size == 1 {
                     let dest = dest[0].clone();
 
@@ -6004,7 +6015,7 @@ pub fn compile_instr(
                     cmds.extend(truncate_to(dest, 1));
                 } else {
                     println!("{:?}", aggregate);
-                    eprintln!("[ERR] ExtractValue can not extract {}-bit integers",size);
+                    eprintln!("[ERR] ExtractValue can not extract {}-bit integers",size * 8);
                 }
             } else {
                 todo!("{:?}", aggregate)
