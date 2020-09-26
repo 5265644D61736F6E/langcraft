@@ -7178,7 +7178,7 @@ pub fn eval_constant(
         Constant::Int { bits: 32, value } => MaybeConst::Const(*value as i32),
         Constant::Int { bits: 48, value } | Constant::Int { bits: 64, value } => {
             // TODO: I mean it's *const* but not convenient...
-            // See also: <i32 x 2>
+            // See also: <i32 x 2> and f64
             let num = get_unique_num();
 
             let lo_word = ScoreHolder::new(format!("%temp{}%0", num)).unwrap();
@@ -7458,6 +7458,27 @@ pub fn eval_constant(
             }
             
             MaybeConst::Const(val_int)
+        }
+        Constant::Float(llvm_ir::constant::Float::Double(val)) => {
+            let mut val_int = 0;
+            
+            unsafe {
+                val_int = *(val as *const f64 as *const i64);
+            }
+            
+            // TODO: I mean it's *const* but not convenient...
+            // See also: <i32 x 2>
+            let num = get_unique_num();
+
+            let lo_word = ScoreHolder::new(format!("%temp{}%0", num)).unwrap();
+            let hi_word = ScoreHolder::new(format!("%temp{}%1", num)).unwrap();
+
+            let cmds = vec![
+                assign_lit(lo_word.clone(), val_int as i32),
+                assign_lit(hi_word.clone(), (val_int >> 32) as i32),
+            ];
+
+            MaybeConst::NonConst(cmds, vec![lo_word, hi_word])
         }
         Constant::Int { bits, value: _ } => {
             eprintln!("[ERR] Constant {}-bit integer is unsupported",bits);
