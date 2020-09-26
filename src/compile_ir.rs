@@ -4105,6 +4105,44 @@ pub fn compile_arithmetic(
 
         match kind {
             ScoreOpKind::AddAssign => cmds.extend(add_128_bit(op0_0, op0_1, op0_2, op0_3, op1_0, op1_1, op1_2, op1_3, dest.clone())),
+            ScoreOpKind::SubAssign => {
+                let op1_inv_0 = get_unique_holder();
+                let op1_inv_1 = get_unique_holder();
+                let op1_inv_2 = get_unique_holder();
+                let op1_inv_3 = get_unique_holder();
+
+                cmds.push(assign(op1_inv_0.clone(), op1_0));
+                cmds.push(assign(op1_inv_1.clone(), op1_1));
+                cmds.push(assign(op1_inv_2.clone(), op1_2));
+                cmds.push(assign(op1_inv_3.clone(), op1_3));
+
+                cmds.extend(invert(op1_inv_0.clone()));
+                cmds.extend(invert(op1_inv_1.clone()));
+                cmds.extend(invert(op1_inv_2.clone()));
+                cmds.extend(invert(op1_inv_3.clone()));
+
+                let op1_neg_name = Name::from(format!("%%temp_neg_{}", get_unique_num()));
+
+                cmds.extend(add_128_bit(
+                    op1_inv_0, 
+                    op1_inv_1,
+                    op1_inv_2, 
+                    op1_inv_3,
+                    ScoreHolder::new("%%1".into()).unwrap(),
+                    ScoreHolder::new("%%0".into()).unwrap(),
+                    ScoreHolder::new("%%0".into()).unwrap(),
+                    ScoreHolder::new("%%0".into()).unwrap(),
+                    op1_neg_name.clone()
+                ));
+
+                let mut tmp = ScoreHolder::from_local_name(op1_neg_name, 16).into_iter();
+                let op1_neg_0 = tmp.next().unwrap();
+                let op1_neg_1 = tmp.next().unwrap();
+                let op1_neg_2 = tmp.next().unwrap();
+                let op1_neg_3 = tmp.next().unwrap();
+
+                cmds.extend(add_128_bit(op0_0, op0_1, op0_2, op0_3, op1_neg_0, op1_neg_1, op1_neg_2, op1_neg_3, dest.clone()));
+            }
             _ => eprintln!("[ERR] 64-bit {:?} is unsupported", kind),
         }
 
