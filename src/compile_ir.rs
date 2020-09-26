@@ -7053,12 +7053,34 @@ pub fn compile_instr(
                     }
                     (Type::IntegerType { bits },llvm_ir::types::FPType::Single) => {
                         dumploc(debugloc);
-                        eprintln!("[ERR] Unsigned integer to floating point is not supported for {}-bit integer types.",bits);
+                        eprintln!("[ERR] Unsigned integer to single precision floating point is not supported for {}-bit integer types.",bits);
+                        Vec::new()
+                    }
+                    (Type::IntegerType { bits: 64 },llvm_ir::types::FPType::Double) => {
+                        let dest = ScoreHolder::from_local_name(dest.clone(),8);
+                        
+                        // shift the significand left
+                        cmds.push(assign(param(0,0),oper[0].clone()));
+                        cmds.push(assign(param(0,1),oper[1].clone()));
+                        cmds.push(
+                            McFuncCall {
+                                id: McFuncId::new("intrinsic:u64tod"),
+                            }
+                            .into(),
+                        );
+                        cmds.push(assign(dest[0].clone(),param(0,0)));
+                        cmds.push(assign(dest[1].clone(),param(0,1)));
+                        
+                        cmds
+                    }
+                    (Type::IntegerType { bits },precision) => {
+                        dumploc(debugloc);
+                        eprintln!("[ERR] Unsigned {}-bit integer to {:?} precision floating point is unsupported.",bits,precision);
                         Vec::new()
                     }
                     (_,_) => {
                         dumploc(debugloc);
-                        eprintln!("[ERR] Unsigned integer to floating point is only supported for 32-bit integer types.");
+                        eprintln!("[ERR] Unsigned integer to floating point is only supported for integer types.");
                         Vec::new()
                     }
                 }
