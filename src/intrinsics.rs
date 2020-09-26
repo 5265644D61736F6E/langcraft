@@ -133,6 +133,8 @@ static INTRINSIC_STRS: &[(&str, &str)] = &[
     ("intrinsic:utof", include_str!("intrinsic/utof.mcfunction")),
     ("intrinsic:u64tof", include_str!("intrinsic/u64tof.mcfunction")),
     ("intrinsic:u64tod", include_str!("intrinsic/u64tod.mcfunction")),
+    ("intrinsic:ftou32", include_str!("intrinsic/ftou32.mcfunction")),
+    ("intrinsic:ftou64", include_str!("intrinsic/ftou64.mcfunction")),
 ];
 
 lazy_static! {

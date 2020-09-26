@@ -6886,27 +6886,6 @@ pub fn compile_instr(
 
             Vec::new()
         }
-        Instruction::FPToUI(llvm_ir::instruction::FPToUI {
-            operand: _,
-            to_type: _,
-            dest: _,
-            debugloc: _
-        }) => {
-            eprintln!("[ERR] FPtoUI not supported");
-
-            Vec::new()
-        }
-        Instruction::FPToSI(llvm_ir::instruction::FPToSI {
-            operand: _,
-            to_type: _,
-            dest: _,
-            debugloc
-        }) => {
-            dumploc(debugloc);
-            eprintln!("[ERR] FPtoSI not supported");
-
-            Vec::new()
-        }
         Instruction::FPTrunc(llvm_ir::instruction::FPTrunc {
             operand: _,
             to_type: _,
@@ -7169,6 +7148,77 @@ pub fn compile_instr(
         }
         Instruction::SIToFP(llvm_ir::instruction::SIToFP {..}) => {
             eprintln!("[ERR] Signed int to floating point not supported");
+
+            Vec::new()
+        }
+        Instruction::FPToUI(llvm_ir::instruction::FPToUI {
+            operand,
+            to_type,
+            dest,
+            debugloc
+        }) => {
+            let (mut cmds,oper) = eval_operand(operand,globals,tys);
+            
+            if let Type::FPType(to_len) = *operand.get_type(tys) {
+                match (&**to_type,to_len) {
+                    (Type::IntegerType { bits: 32 },llvm_ir::types::FPType::Single) => {
+                        let dest = ScoreHolder::from_local_name(dest.clone(),4);
+                        
+                        // shift the significand left
+                        cmds.push(assign(param(0,0),oper[0].clone()));
+                        cmds.push(
+                            McFuncCall {
+                                id: McFuncId::new("intrinsic:ftou32"),
+                            }
+                            .into(),
+                        );
+                        cmds.push(assign(dest[0].clone(),param(0,0)));
+                        
+                        cmds
+                    }
+                    (Type::IntegerType { bits: 64 },llvm_ir::types::FPType::Single) => {
+                        let dest = ScoreHolder::from_local_name(dest.clone(),8);
+                        
+                        // shift the significand left
+                        cmds.push(assign(param(0,0),oper[0].clone()));
+                        cmds.push(
+                            McFuncCall {
+                                id: McFuncId::new("intrinsic:ftou64"),
+                            }
+                            .into(),
+                        );
+                        cmds.push(assign(dest[0].clone(),param(0,0)));
+                        cmds.push(assign(dest[1].clone(),param(0,1)));
+                        
+                        cmds
+                    }
+                    (Type::IntegerType { bits },precision) => {
+                        dumploc(debugloc);
+                        eprintln!("[ERR] Unsigned {}-bit integer from {:?} precision floating point is unsupported.",bits,precision);
+                        Vec::new()
+                    }
+                    (_,_) => {
+                        dumploc(debugloc);
+                        eprintln!("[ERR] Floating point to unsigned integer is only supported for integer types.");
+                        eprintln!("{}",unreach_msg);
+                        Vec::new()
+                    }
+                }
+            } else {
+                dumploc(debugloc);
+                eprintln!("[ERR] Floating point to unsigned integer is only supported for floating point types.");
+                eprintln!("{}",unreach_msg);
+                Vec::new()
+            }
+        }
+        Instruction::FPToSI(llvm_ir::instruction::FPToSI {
+            operand: _,
+            to_type: _,
+            dest: _,
+            debugloc
+        }) => {
+            dumploc(debugloc);
+            eprintln!("[ERR] FPtoSI not supported");
 
             Vec::new()
         }
