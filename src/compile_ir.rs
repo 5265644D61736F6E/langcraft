@@ -5924,13 +5924,6 @@ pub fn compile_instr(
         }) => {
             let (mut cmds, op) = eval_operand(operand, globals, tys);
 
-            let dest = ScoreHolder::from_local_name(dest.clone(), 1)
-                .into_iter()
-                .next()
-                .unwrap();
-
-            cmds.push(assign(dest.clone(), op[0].clone()));
-
             let bits = if let Type::IntegerType { bits } = &**to_type {
                 *bits
             } else {
@@ -5938,9 +5931,25 @@ pub fn compile_instr(
             };
 
             if bits >= 31 {
-                dumploc(debugloc);
-                eprintln!("[ERR] Truncate is only supported for less than 31 bits");
+                let words = (bits as usize + 31) / 32;
+                let dest = ScoreHolder::from_local_name(dest.clone(), (bits as usize + 7) / 8);
+
+                for i in 0..=(words - 1) {
+                    cmds.push(assign(dest[i].clone(), op[i].clone()));
+                }
+                
+                // FIXME: Is this (and the other one) valid?
+                if bits % 32 > 0 {
+                    cmds.push(make_op_lit(dest[words - 1].clone(), "%=", 1 << (bits % 32)));
+                }
             } else {
+                let dest = ScoreHolder::from_local_name(dest.clone(), 4)
+                    .into_iter()
+                    .next()
+                    .unwrap();
+
+                cmds.push(assign(dest.clone(), op[0].clone()));
+                
                 // FIXME: Is this (and the other one) valid?
                 cmds.push(make_op_lit(dest, "%=", 1 << bits));
             }
