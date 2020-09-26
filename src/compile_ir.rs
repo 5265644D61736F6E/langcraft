@@ -6755,8 +6755,10 @@ pub fn compile_instr(
                             cmds.push(assign(dest.clone(), vec[c / 4].clone()));
                             cmds.push(make_op_lit(dest, "/=", 1 << (8 * (c % 4))));
                         }
-                        Type::IntegerType { bits } => {
-                            eprintln!("[ERR] {}-bit constants for ExtractElement are not supported",bits);
+                        Type::IntegerType { bits: 64 } => {
+                            let dest = dest.into_iter().next().unwrap();
+
+                            cmds.push(assign(dest, vec[c * 2].clone()));
                         }
                         ty => todo!("{:?}", ty),
                     }
