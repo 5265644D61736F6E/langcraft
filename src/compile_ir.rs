@@ -5901,7 +5901,11 @@ pub fn compile_instr(
                 dumploc(debugloc);
                 
                 if let Type::IntegerType { bits } = &*operand.get_type(tys) {
-                    eprintln!("[ERR] Truncate is not correctly supported for {} bits",bits);
+                    if *bits < 32 {
+                        eprintln!("[ERR] Truncate is not supported for {} bits",bits);
+                    } else {
+                        eprintln!("[WARN] Truncate is not tested for {} bits",bits);
+                    }
                 } else {
                     eprintln!("[ERR] Truncate is only supported for integers");
                 }
