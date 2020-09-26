@@ -6620,6 +6620,27 @@ pub fn compile_instr(
                         }
                     }
                 }
+                Type::IntegerType { bits: 64 } => {
+                    for (i, mask_idx) in mask_vals.into_iter().enumerate() {
+                        match &*mask_idx {
+                            Constant::Undef(_) => {
+                                // Should we mark it as `undef` for the interpreter?
+                            }
+                            Constant::Int { bits: _, value } => {
+                                let value = *value as usize;
+
+                                let (src0,src1) = if value > op0_len {
+                                    (&op1[(value - op0_len) * 2],&op1[(value - op0_len) * 2 + 1])
+                                } else {
+                                    (&op0[value * 2],&op0[value * 2 + 1])
+                                };
+                                cmds.push(assign(dest[i * 2].clone(), src0.clone()));
+                                cmds.push(assign(dest[i * 2 + 1].clone(), src1.clone()));
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                }
                 // This does deal with signs, do not use with 8 bits!
                 Type::IntegerType { bits: 1 } if mask_vals.len() == 4 => {
                     if mask_vals.len() != 4 {
