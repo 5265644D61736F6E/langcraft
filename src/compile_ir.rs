@@ -7020,8 +7020,102 @@ pub fn compile_instr(
 
             Vec::new()
         }
-        Instruction::FCmp(llvm_ir::instruction::FCmp {..}) => {
-            eprintln!("[ERR] Floating point compare not supported");
+        Instruction::FCmp(llvm_ir::instruction::FCmp {
+            predicate,
+            operand0,
+            operand1,
+            dest,
+            debugloc
+        }) => {
+            /*
+             * Floating point comparisons are like integer comparisons
+             * The exponent is the first thing to compare after the sign bit
+             * in integer comparisons.
+             * If the exponents aren't equal, then they can be compared.
+             * If they are, then the next part will be compared as an integer.
+             * At this point, the significand is already known to be shifted to
+             * the right place.
+             */
+            
+            dumploc(debugloc);
+            eprintln!("[WARN] Special floating point numbers are unimplemented.");
+            
+            let (cmds,op0) = eval_operand(operand0,globals,tys);
+            let (cmds_new,op1) = eval_operand(operand0,globals,tys);
+            cmds.extend(cmds_new);
+            
+            let dest = &ScoreHolder::from_local_name(dest.clone(),1)[0];
+            cmds.push(assign_lit(dest.clone(),0));
+            
+            if &*operand0.get_type(tys) == &*operand0.get_type(tys) {
+                if let llvm_ir::Type::FPType(precision) = &*operand0.get_type(tys) {
+                    match precision {
+                        llvm_ir::types::FPType::Single => match predicate {
+                            llvm_ir::predicates::FPPredicate::OLT
+                            | llvm_ir::predicates::FPPredicate::ULT => {
+                                let lt = Execute::new();
+                                lt.with_if(ExecuteCondition::Score {
+                                    target: op0,
+                                    target_obj: OBJECTIVE.to_string(),
+                                    kind: ExecuteCondKind::Relation {
+                                        relation: Relation::LessThan,
+                                        source: op1,
+                                        source_obj: OBJECTIVE.to_string()
+                                    }
+                                });
+                                lt.with_run(assign_lit(dest.clone(),1));
+                                cmds.push(lt);
+                            }
+                            llvm_ir::predicates::FPPredicate::OLE
+                            | llvm_ir::predicates::FPPredicate::ULE => {
+                                let le = Execute::new();
+                                le.with_if(ExecuteCondition::Score {
+                                    target: op0,
+                                    target_obj: OBJECTIVE.to_string(),
+                                    kind: ExecuteCondKind::Relation {
+                                        relation: Relation::LessThanEq,
+                                        source: op1,
+                                        source_obj: OBJECTIVE.to_string()
+                                    }
+                                });
+                                le.with_run(assign_lit(dest.clone(),1));
+                                cmds.push(le);
+                            }
+                            llvm_ir::predicates::FPPredicate::OGT
+                            | llvm_ir::predicates::FPPredicate::UGT => {
+                                let gt = Execute::new();
+                                gt.with_if(ExecuteCondition::Score {
+                                    target: op0,
+                                    target_obj: OBJECTIVE.to_string(),
+                                    kind: ExecuteCondKind::Relation {
+                                        relation: Relation::GreaterThan,
+                                        source: op1,
+                                        source_obj: OBJECTIVE.to_string()
+                                    }
+                                });
+                                gt.with_run(assign_lit(dest.clone(),1));
+                                cmds.push(gt);
+                            }
+                            _ => {
+                                dumploc(debugloc);
+                                eprintln!("[ERR] Single precision floating point {:?} is unsupported",predicate);
+                            }
+                        }
+                        _ => {
+                            dumploc(debugloc);
+                            eprintln!("[ERR] Can not compare {:?} precision floating point",precision);
+                        }
+                    }
+                } else {
+                    dumploc(debugloc);
+                    eprintln!("[ERR] Can only compare floating points as floating points");
+                    eprintln!("{}",unreach_msg);
+                }
+            } else {
+                dumploc(debugloc);
+                eprintln!("[ERR] Cannot floating point compare differing types");
+                eprintln!("{}",unreach_msg);
+            }
 
             Vec::new()
         }
