@@ -164,6 +164,14 @@ pub fn pop_cond_stack(target: ScoreHolder) -> Vec<Command> {
     cmds
 }
 
+pub fn except_ptr() -> ScoreHolder {
+    ScoreHolder::new("%except%ptr".to_string()).unwrap()
+}
+
+pub fn except_type() -> ScoreHolder {
+    ScoreHolder::new("%except%type".to_string()).unwrap()
+}
+
 pub fn argptr() -> ScoreHolder {
     ScoreHolder::new("%argptr".to_string()).unwrap()
 }
@@ -6898,12 +6906,39 @@ pub fn compile_instr(
         }
         Instruction::LandingPad(llvm_ir::instruction::LandingPad {
             debugloc,
-            ..
+            result_type,
+            clauses,
+            dest,
+            cleanup
         }) => {
-            dumploc(debugloc);
-            eprintln!("[ERR] LandingPad not supported");
-
-            Vec::new()
+            if !cleanup {
+                dumploc(debugloc);
+                eprintln!("[WARN] LandingPad is not implemented to catch specific errors.");
+            }
+            
+            if let Type::StructType { element_types: res_types, is_packed: false } = &**result_type {
+                let (restype0,restype1) = (&*res_types[0],&*res_types[1]);
+                
+                if matches!(restype0.clone(),Type::PointerType { .. }) && matches!(restype1.clone(),Type::IntegerType { bits: 32 }) {
+                    let dest = ScoreHolder::from_local_name(dest.clone(),8);
+                    let (dest0,dest1) = (&dest[0],&dest[1]);
+                    
+                    vec![
+                        assign(dest0.clone(),except_ptr()),
+                        assign(dest1.clone(),except_type())
+                    ]
+                } else {
+                    dumploc(debugloc);
+                    eprintln!("[ERR] LandingPad not supported with type {:?}",&**result_type);
+                    eprintln!("{}",unreach_msg);
+                    vec![]
+                }
+            } else {
+                dumploc(debugloc);
+                eprintln!("[ERR] LandingPad not supported with type {:?}",&**result_type);
+                eprintln!("{}",unreach_msg);
+                vec![]
+            }
         }
         Instruction::AtomicRMW(llvm_ir::instruction::AtomicRMW {
             operation,
