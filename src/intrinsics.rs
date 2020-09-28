@@ -139,6 +139,7 @@ static INTRINSIC_STRS: &[(&str, &str)] = &[
     
     ("intrinsic:udiv64", include_str!("intrinsic/udiv64.mcfunction")),
     ("intrinsic:udiv64_tryset", include_str!("intrinsic/udiv64_tryset.mcfunction")),
+    ("intrinsic:urem64", include_str!("intrinsic/urem64.mcfunction")),
 ];
 
 lazy_static! {

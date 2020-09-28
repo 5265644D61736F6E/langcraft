@@ -5365,7 +5365,7 @@ pub fn compile_instr(
             operand0,
             operand1,
             dest,
-            ..
+            debugloc
         }) => {
             let (mut cmds, source0) = eval_operand(operand0, globals, tys);
             let (tmp, source1) = eval_operand(operand1, globals, tys);
@@ -5385,7 +5385,7 @@ pub fn compile_instr(
                 type_layout(&operand0.get_type(tys), tys).size(),
             );
 
-            if let Type::VectorType {
+            let base_len = if let Type::VectorType {
                 element_type,
                 num_elements,
             } = &*operand0.get_type(tys)
@@ -5397,27 +5397,45 @@ pub fn compile_instr(
                 assert_eq!(source0.len(), *num_elements);
                 assert_eq!(source1.len(), *num_elements);
                 assert_eq!(dest.len(), *num_elements);
+                
+                *num_elements
             } else {
-                if (source0.len() != 1) || (source1.len() != 1) || (dest.len() != 1) {
-                    eprintln!("[ERR] Can only divide words (32-bit)");
-                }
+                1
             };
 
-            for (source0, (source1, dest)) in source0
-                .into_iter()
-                .zip(source1.into_iter().zip(dest.into_iter()))
-            {
-                cmds.push(assign(dest.clone(), source0));
-                cmds.push(
-                    ScoreOp {
-                        target: dest.into(),
-                        target_obj: OBJECTIVE.to_string(),
-                        kind: ScoreOpKind::ModAssign,
-                        source: Target::Uuid(source1),
-                        source_obj: OBJECTIVE.to_string(),
-                    }
-                    .into(),
-                );
+            if source0.len() / base_len == 1 || source1.len() / base_len == 1 || dest.len() / base_len == 1 {
+                for (source0, (source1, dest)) in source0
+                    .into_iter()
+                    .zip(source1.into_iter().zip(dest.into_iter()))
+                {
+                    cmds.push(assign(dest.clone(), source0));
+                    cmds.push(
+                        ScoreOp {
+                            target: dest.into(),
+                            target_obj: OBJECTIVE.to_string(),
+                            kind: ScoreOpKind::ModAssign,
+                            source: Target::Uuid(source1),
+                            source_obj: OBJECTIVE.to_string(),
+                        }
+                        .into(),
+                    );
+                }
+            } else if source0.len() / base_len == 2 || source1.len() / base_len == 2 || dest.len() / base_len == 2 {
+                if matches!(&*operand0.get_type(tys),Type::IntegerType { .. }) && matches!(&*operand1.get_type(tys),Type::IntegerType { .. }) {
+                    cmds.push(assign(param(0,0),source0[0].clone()));
+                    cmds.push(assign(param(0,1),source0[1].clone()));
+                    cmds.push(McFuncCall {
+                        id: McFuncId::new("intrinsic:urem64"),
+                    }.into());
+                    cmds.push(assign(source0[0].clone(),param(0,0)));
+                    cmds.push(assign(source0[1].clone(),param(0,1)));
+                } else {
+                    dumploc(debugloc);
+                    eprintln!("[ERR] Unsigned 64-bit remainer is only supported for integers.");
+                }
+            } else {
+                dumploc(debugloc);
+                eprintln!("[ERR] Can not divide a {}-bit integer by a {}-bit integer for a {}-bit remainder",source0.len() * 32,source1.len() * 32,dest.len() * 32);
             }
             cmds
         }
