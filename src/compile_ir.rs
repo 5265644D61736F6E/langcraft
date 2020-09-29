@@ -743,7 +743,7 @@ pub fn compile_module(module: &Module, options: &BuildOptions) -> Vec<McFunction
         //let main_idx = funcs.iter().position(|f| &f.id == main_id).unwrap();
         //let (main_x, main_z) = func_idx_to_pos(main_idx);
     funcs.push(McFunction {
-        id: McFuncId::new("run"),
+        id: McFuncId::new(""),
         cmds: vec![
             McFuncCall {
                 id: McFuncId::new("init"),

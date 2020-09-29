@@ -5,7 +5,7 @@ use std::path::Path;
 pub fn compile_and_run(path: &Path) -> Interpreter {
     let datapack = Datapack::from_bc(path, &BuildOptions::default()).unwrap();
 
-    let idx = datapack.functions.iter().enumerate().find(|(_, f)| f.id.name == "run").unwrap().0;
+    let idx = datapack.functions.iter().enumerate().find(|(_, f)| f.id.name == "").unwrap().0;
 
     let mut interp = Interpreter::new(datapack, idx, "");
 

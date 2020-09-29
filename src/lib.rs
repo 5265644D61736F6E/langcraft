@@ -24,7 +24,7 @@ impl Datapack {
         self.functions
             .iter()
             .enumerate()
-            .find(|(_, f)| f.id == FunctionId::new("run"))
+            .find(|(_, f)| f.id == FunctionId::new(""))
             .map(|(i, _)| i)
     }
 
