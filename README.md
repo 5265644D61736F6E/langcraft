@@ -15,7 +15,7 @@ Valid arguments are:
 
 To use the generated datapack in Minecraft:
  1. Copy the entire output folder (`./out` by default) to the `datapacks/` directory of a Minecraft world (using a superflat void world is recommended)
- 2. Run `/function setup:setup`. This only has to be done the first time a Langcraft datapack is used in a world.
+ 2. Run `/function setup:`. This only has to be done the first time a Langcraft datapack is used in a world.
  3. Run `/function rust:`. Make sure to include the colon at the end.
  4. If the datapack is modified while the world is open, run `/reload` and then go back to step 3.
 

@@ -61,7 +61,7 @@ impl Datapack {
 
         std::fs::create_dir_all(output_folder.join(Path::new("data/setup/functions/")))?;
         std::fs::write(
-            output_folder.join(Path::new("data/setup/functions/setup.mcfunction")),
+            output_folder.join(Path::new("data/setup/functions/.mcfunction")),
             SETUP_STR,
         )?;
 
