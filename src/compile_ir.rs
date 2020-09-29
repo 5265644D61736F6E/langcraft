@@ -2360,6 +2360,25 @@ fn compile_ashr(
             );
             cmds.push(assign(dest.next().unwrap(), param(0, 0)));
             cmds.push(assign(dest.next().unwrap(), param(0, 1)));
+        } else if op0.len() == 4 {
+            let mut dest = ScoreHolder::from_local_name(dest.clone(), 16).into_iter();
+
+            cmds.extend(tmp);
+            cmds.push(assign(param(0, 0), op0[0].clone()));
+            cmds.push(assign(param(0, 1), op0[1].clone()));
+            cmds.push(assign(param(0, 2), op0[2].clone()));
+            cmds.push(assign(param(0, 3), op0[3].clone()));
+            cmds.push(assign(param(1, 0), op1));
+            cmds.push(
+                McFuncCall {
+                    id: McFuncId::new("intrinsic:ashr128"),
+                }
+                .into(),
+            );
+            cmds.push(assign(dest.next().unwrap(), param(0, 0)));
+            cmds.push(assign(dest.next().unwrap(), param(0, 1)));
+            cmds.push(assign(dest.next().unwrap(), param(0, 2)));
+            cmds.push(assign(dest.next().unwrap(), param(0, 3)));
         } else {
             dumploc(debugloc);
             eprintln!("[ERR] Arithmetic Shift Right with {} bits is unimplemented",op0.len() * 32);
