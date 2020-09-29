@@ -5885,9 +5885,67 @@ pub fn compile_instr(
 
                                 cmds.push(out_command.into());
                             }
+                        } else if target.len() == 4 && source.len() == 4 {
+                            match predicate {
+                                IntPredicate::NE => {
+                                    cmds.push(assign_lit(dest.clone(),1));
+                                    let mut eq = Execute::new();
+                                    eq.with_if(ExecuteCondition::Score {
+                                        target: target[0].clone().into(),
+                                        target_obj: OBJECTIVE.to_string(),
+                                        kind: ExecuteCondKind::Relation {
+                                            relation: cir::Relation::Eq,
+                                            source: source[0].clone().into(),
+                                            source_obj: OBJECTIVE.to_string()
+                                        }
+                                    });
+                                    eq.with_run(assign_lit(dest.clone(),0));
+                                    cmds.push(eq.into());
+                                    let mut eq = Execute::new();
+                                    eq.with_if(ExecuteCondition::Score {
+                                        target: target[1].clone().into(),
+                                        target_obj: OBJECTIVE.to_string(),
+                                        kind: ExecuteCondKind::Relation {
+                                            relation: cir::Relation::Eq,
+                                            source: source[1].clone().into(),
+                                            source_obj: OBJECTIVE.to_string()
+                                        }
+                                    });
+                                    eq.with_run(assign_lit(dest.clone(),0));
+                                    cmds.push(eq.into());
+                                    let mut eq = Execute::new();
+                                    eq.with_if(ExecuteCondition::Score {
+                                        target: target[2].clone().into(),
+                                        target_obj: OBJECTIVE.to_string(),
+                                        kind: ExecuteCondKind::Relation {
+                                            relation: cir::Relation::Eq,
+                                            source: source[2].clone().into(),
+                                            source_obj: OBJECTIVE.to_string()
+                                        }
+                                    });
+                                    eq.with_run(assign_lit(dest.clone(),0));
+                                    cmds.push(eq.into());
+                                    let mut eq = Execute::new();
+                                    eq.with_if(ExecuteCondition::Score {
+                                        target: target[3].clone().into(),
+                                        target_obj: OBJECTIVE.to_string(),
+                                        kind: ExecuteCondKind::Relation {
+                                            relation: cir::Relation::Eq,
+                                            source: source[3].clone().into(),
+                                            source_obj: OBJECTIVE.to_string()
+                                        }
+                                    });
+                                    eq.with_run(assign_lit(dest.clone(),0));
+                                    cmds.push(eq.into());
+                                },
+                                _ => {
+                                    dumploc(debugloc);
+                                    eprintln!("[ERR] ICMP predicate {:?} is unsupported for 128 bit",predicate);
+                                }
+                            }
                         } else {
                             dumploc(debugloc);
-                            eprintln!("[ERR] {}-bit with {}-bit ICMP is unsupported",target.len() * 32,source.len() * 32);
+                            eprintln!("[ERR] {}-bit with {}-bit ICMP ({:?}) is unsupported",target.len() * 32,source.len() * 32,predicate);
                         }
                     } else {
                         let target = target.into_iter().next().unwrap();
