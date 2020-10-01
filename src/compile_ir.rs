@@ -7159,10 +7159,49 @@ pub fn compile_instr(
 
             Vec::new()
         }
-        Instruction::FMul(llvm_ir::instruction::FMul {..}) => {
-            eprintln!("[ERR] Floating point multiply not supported");
-
-            Vec::new()
+        Instruction::FMul(llvm_ir::instruction::FMul {
+            operand0,
+            operand1,
+            dest,
+            debugloc,
+        }) => {
+            let (mut cmds,op0) = eval_operand(operand0,globals,tys);
+            let (op1_cmds,op1) = eval_operand(operand1,globals,tys);
+            
+            cmds.extend(op1_cmds);
+            
+            if operand0.get_type(tys) == operand1.get_type(tys) {
+                if let Type::FPType(precision) = *operand0.get_type(tys) {
+                    match precision {
+                        llvm_ir::types::FPType::Single => {
+                            cmds.extend(vec![
+                                assign(param(0,0),op0[0].clone()),
+                                assign(param(1,0),op1[0].clone()),
+                                McFuncCall {
+                                    id: McFuncId::new("intrinsic:fmul"),
+                                }
+                                .into(),
+                                assign(ScoreHolder::from_local_name(dest.clone(),4)[0].clone(),return_holder(0))
+                            ]);
+                            
+                            cmds
+                        }
+                        _ => {
+                            dumploc(debugloc);
+                            eprintln!("[ERR] {:?} precision floating point multiply is unsupported",precision);
+                            cmds
+                        }
+                    }
+                } else {
+                    dumploc(debugloc);
+                    eprintln!("[ERR] Floating point multiply can only multiply floating points");
+                    cmds
+                }
+            } else {
+                dumploc(debugloc);
+                eprintln!("[ERR] Floating point multiply is unsupported for differing types");
+                vec![]
+            }
         }
         Instruction::FDiv(llvm_ir::instruction::FDiv {..}) => {
             eprintln!("[ERR] Floating point divide not supported");
