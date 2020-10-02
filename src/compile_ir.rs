@@ -4170,7 +4170,28 @@ pub fn compile_arithmetic(
 
                 cmds.extend(add_128_bit(op0_0, op0_1, op0_2, op0_3, op1_neg_0, op1_neg_1, op1_neg_2, op1_neg_3, dest.clone()));
             }
-            _ => eprintln!("[ERR] 64-bit {:?} is unsupported", kind),
+            ScoreOpKind::MulAssign => {
+                let mut dest = ScoreHolder::from_local_name(dest.clone(), 16);
+                
+                cmds.extend(vec![
+                    assign(param(0,0),op0_0),
+                    assign(param(0,1),op0_1),
+                    assign(param(0,2),op0_2),
+                    assign(param(0,3),op0_3),
+                    assign(param(1,0),op1_0),
+                    assign(param(1,1),op1_1),
+                    assign(param(1,2),op1_2),
+                    assign(param(1,3),op1_3),
+                    McFuncCall {
+                        id: McFuncId::new("intrinsic:mul128")
+                    }.into(),
+                    assign(dest[0].clone(),return_holder(0)),
+                    assign(dest[1].clone(),return_holder(1)),
+                    assign(dest[2].clone(),return_holder(2)),
+                    assign(dest[3].clone(),return_holder(3))
+                ]);
+            }
+            _ => eprintln!("[ERR] 128-bit {:?} is unsupported", kind),
         }
 
         cmds
