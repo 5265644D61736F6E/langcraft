@@ -6686,8 +6686,45 @@ pub fn compile_instr(
                 }
                 
                 cmds
-            } else if matches!(&**to_type, Type::VectorType { .. }) {
-                eprintln!("[ERR] Sign extension to vector is unimplemented");
+            } else if let Type::VectorType { element_type, num_elements } = &**to_type {
+                if matches!(&**element_type,Type::IntegerType { bits: 64 }) {
+                    let dest = ScoreHolder::from_local_name(dest.clone(), 8 * num_elements);
+                    
+                    if let Type::VectorType { element_type, num_elements } = &*operand.get_type(tys) {
+                        if matches!(&**element_type,Type::IntegerType { bits: 32 }) {
+                            let mut op = op.into_iter();
+                            
+                            for i in 0..*num_elements {
+                                let mut exec = Execute::new();
+                                exec.with_if(ExecuteCondition::Score {
+                                    target: dest[0].clone().into(),
+                                    target_obj: OBJECTIVE.into(),
+                                    kind: ExecuteCondKind::Matches((..=-1).into()),
+                                });
+                                exec.with_run(assign_lit(dest[1].clone(), u32::MAX as i32));
+                                
+                                cmds.extend(vec![
+                                    assign(dest[i * 2].clone(), op.next().unwrap()),
+                                    assign_lit(dest[i * 2 + 1].clone(), 0),
+                                    exec.into()
+                                ]);
+                            }
+                        } else {
+                            dumploc(debugloc);
+                            eprintln!("[ERR] Can not sign extend this vector to 64 bits");
+                        }
+                    } else {
+                        dumploc(debugloc);
+                        eprintln!("[ERR] Can not sign extend non-vector to vector");
+                        eprintln!("{}",unreach_msg);
+                    }
+                } else if let Type::IntegerType { bits } = &**element_type {
+                    dumploc(debugloc);
+                    eprintln!("[ERR] Sign extension to vector of {}-bit integers is unimplemented",bits);
+                } else {
+                    dumploc(debugloc);
+                    eprintln!("[ERR] Sign extension to vector is unimplemented");
+                }
 
                 cmds
             } else if let Type::IntegerType { bits } = &**to_type {
