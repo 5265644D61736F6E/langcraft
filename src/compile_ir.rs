@@ -16,14 +16,15 @@ use llvm_ir::constant::ICmp as ICmpConst;
 use llvm_ir::constant::Select as SelectConst;
 use llvm_ir::constant::ConstantRef;
 use llvm_ir::instruction::{
-    Add, Alloca, And, AShr, BitCast, Call, ExtractElement, ExtractValue, GetElementPtr, ICmp,
-    InsertElement, InsertValue, IntToPtr, LShr, Load, Mul, Or, Phi, PtrToInt, SDiv, SExt, SRem,
-    Select, Shl, ShuffleVector, Store, Sub, Trunc, UDiv, URem, Xor, ZExt,
+    Add, Alloca, And, AShr, AtomicRMW, BitCast, Call, ExtractElement, ExtractValue, 
+    FCmp, FDiv, FMul, FPExt, FPToSI, FPToUI, GetElementPtr, ICmp,
+    InsertElement, InsertValue, IntToPtr, LandingPad, LShr, Load, Mul, Or, Phi, PtrToInt, SDiv, SExt, SRem,
+    Select, Shl, ShuffleVector, Store, Sub, Trunc, UDiv, UIToFP, URem, Xor, ZExt,
 };
 use llvm_ir::function::ParameterAttribute;
 use llvm_ir::module::GlobalVariable;
 use llvm_ir::terminator::{Br, CondBr, Ret, Switch, Unreachable};
-use llvm_ir::types::{Typed, TypeRef, Types, NamedStructDef};
+use llvm_ir::types::{Typed, TypeRef, Types, NamedStructDef, FPType};
 use llvm_ir::{
     Constant, Function, Instruction, IntPredicate, Module, Name, Operand, Terminator, Type,
 };
@@ -4378,12 +4379,12 @@ pub fn type_layout(ty: &Type, tys: &Types) -> Layout {
             eprintln!("[WARN] Floating point not supported");
             
             match precision {
-                llvm_ir::types::FPType::Half => Layout::from_size_align(2,4).unwrap(),
-                llvm_ir::types::FPType::Single => Layout::from_size_align(4,4).unwrap(),
-                llvm_ir::types::FPType::Double => Layout::from_size_align(8,4).unwrap(),
-                llvm_ir::types::FPType::FP128 => Layout::from_size_align(16,4).unwrap(),
-                llvm_ir::types::FPType::X86_FP80 => Layout::from_size_align(12,4).unwrap(),
-                llvm_ir::types::FPType::PPC_FP128 => Layout::from_size_align(16,4).unwrap(),
+                FPType::Half => Layout::from_size_align(2,4).unwrap(),
+                FPType::Single => Layout::from_size_align(4,4).unwrap(),
+                FPType::Double => Layout::from_size_align(8,4).unwrap(),
+                FPType::FP128 => Layout::from_size_align(16,4).unwrap(),
+                FPType::X86_FP80 => Layout::from_size_align(12,4).unwrap(),
+                FPType::PPC_FP128 => Layout::from_size_align(16,4).unwrap(),
             }
             
         },
@@ -7122,7 +7123,7 @@ pub fn compile_instr(
 
             Vec::new()
         }
-        Instruction::LandingPad(llvm_ir::instruction::LandingPad {
+        Instruction::LandingPad(LandingPad {
             debugloc,
             result_type,
             clauses,
@@ -7158,7 +7159,7 @@ pub fn compile_instr(
                 vec![]
             }
         }
-        Instruction::AtomicRMW(llvm_ir::instruction::AtomicRMW {
+        Instruction::AtomicRMW(AtomicRMW {
             operation,
             address,
             value,
@@ -7263,7 +7264,7 @@ pub fn compile_instr(
 
             Vec::new()
         }
-        Instruction::FMul(llvm_ir::instruction::FMul {
+        Instruction::FMul(FMul {
             operand0,
             operand1,
             dest,
@@ -7277,7 +7278,7 @@ pub fn compile_instr(
             if operand0.get_type(tys) == operand1.get_type(tys) {
                 if let Type::FPType(precision) = *operand0.get_type(tys) {
                     match precision {
-                        llvm_ir::types::FPType::Single => {
+                        FPType::Single => {
                             cmds.extend(vec![
                                 assign(param(0,0),op0[0].clone()),
                                 assign(param(1,0),op1[0].clone()),
@@ -7307,7 +7308,7 @@ pub fn compile_instr(
                 vec![]
             }
         }
-        Instruction::FDiv(llvm_ir::instruction::FDiv {
+        Instruction::FDiv(FDiv {
             operand0,
             operand1,
             dest,
@@ -7321,7 +7322,7 @@ pub fn compile_instr(
             if operand0.get_type(tys) == operand1.get_type(tys) {
                 if let Type::FPType(precision) = *operand0.get_type(tys) {
                     match precision {
-                        llvm_ir::types::FPType::Single => {
+                        FPType::Single => {
                             cmds.extend(vec![
                                 assign(param(0,0),op0[0].clone()),
                                 assign(param(1,0),op1[0].clone()),
@@ -7351,7 +7352,7 @@ pub fn compile_instr(
                 vec![]
             }
         }
-        Instruction::FCmp(llvm_ir::instruction::FCmp {
+        Instruction::FCmp(FCmp {
             predicate,
             operand0,
             operand1,
@@ -7381,7 +7382,7 @@ pub fn compile_instr(
             if &*operand0.get_type(tys) == &*operand0.get_type(tys) {
                 if let llvm_ir::Type::FPType(precision) = &*operand0.get_type(tys) {
                     match precision {
-                        llvm_ir::types::FPType::Single => match predicate {
+                        FPType::Single => match predicate {
                             llvm_ir::predicates::FPPredicate::OLT
                             | llvm_ir::predicates::FPPredicate::ULT => {
                                 let mut lt = Execute::new();
@@ -7450,7 +7451,7 @@ pub fn compile_instr(
 
             Vec::new()
         }
-        Instruction::FPExt(llvm_ir::instruction::FPExt {
+        Instruction::FPExt(FPExt {
             operand,
             to_type,
             dest,
@@ -7461,7 +7462,7 @@ pub fn compile_instr(
             // TODO generalize this
             if let (llvm_ir::Type::FPType(from_len),llvm_ir::Type::FPType(to_len)) = (&*operand.get_type(tys),&**to_type) {
                 match (from_len,to_len) {
-                    (llvm_ir::types::FPType::Single,llvm_ir::types::FPType::Double) => {
+                    (FPType::Single,FPType::Double) => {
                         let dest = ScoreHolder::from_local_name(dest.clone(),8);
                         
                         // shift the significand left
@@ -7490,7 +7491,7 @@ pub fn compile_instr(
                 Vec::new()
             }
         }
-        Instruction::UIToFP(llvm_ir::instruction::UIToFP {
+        Instruction::UIToFP(UIToFP {
             operand,
             dest,
             to_type,
@@ -7500,7 +7501,7 @@ pub fn compile_instr(
             
             if let Type::FPType(to_len) = &**to_type {
                 match (&*operand.get_type(tys),to_len) {
-                    (Type::IntegerType { bits: 32 },llvm_ir::types::FPType::Single) => {
+                    (Type::IntegerType { bits: 32 },FPType::Single) => {
                         let dest = ScoreHolder::from_local_name(dest.clone(),4);
                         
                         // shift the significand left
@@ -7515,7 +7516,7 @@ pub fn compile_instr(
                         
                         cmds
                     }
-                    (Type::IntegerType { bits: 64 },llvm_ir::types::FPType::Single) => {
+                    (Type::IntegerType { bits: 64 },FPType::Single) => {
                         let dest = ScoreHolder::from_local_name(dest.clone(),4);
                         
                         // shift the significand left
@@ -7531,12 +7532,12 @@ pub fn compile_instr(
                         
                         cmds
                     }
-                    (Type::IntegerType { bits },llvm_ir::types::FPType::Single) => {
+                    (Type::IntegerType { bits },FPType::Single) => {
                         dumploc(debugloc);
                         eprintln!("[ERR] Unsigned integer to single precision floating point is not supported for {}-bit integer types.",bits);
                         Vec::new()
                     }
-                    (Type::IntegerType { bits: 64 },llvm_ir::types::FPType::Double) => {
+                    (Type::IntegerType { bits: 64 },FPType::Double) => {
                         let dest = ScoreHolder::from_local_name(dest.clone(),8);
                         
                         // shift the significand left
@@ -7576,7 +7577,7 @@ pub fn compile_instr(
 
             Vec::new()
         }
-        Instruction::FPToUI(llvm_ir::instruction::FPToUI {
+        Instruction::FPToUI(FPToUI {
             operand,
             to_type,
             dest,
@@ -7586,7 +7587,7 @@ pub fn compile_instr(
             
             if let Type::FPType(to_len) = *operand.get_type(tys) {
                 match (&**to_type,to_len) {
-                    (Type::IntegerType { bits: 32 },llvm_ir::types::FPType::Single) => {
+                    (Type::IntegerType { bits: 32 },FPType::Single) => {
                         let dest = ScoreHolder::from_local_name(dest.clone(),4);
                         
                         // shift the significand left
@@ -7601,7 +7602,7 @@ pub fn compile_instr(
                         
                         cmds
                     }
-                    (Type::IntegerType { bits: 64 },llvm_ir::types::FPType::Single) => {
+                    (Type::IntegerType { bits: 64 },FPType::Single) => {
                         let dest = ScoreHolder::from_local_name(dest.clone(),8);
                         
                         // shift the significand left
@@ -7636,7 +7637,7 @@ pub fn compile_instr(
                 Vec::new()
             }
         }
-        Instruction::FPToSI(llvm_ir::instruction::FPToSI {
+        Instruction::FPToSI(FPToSI {
             operand,
             to_type,
             dest,
@@ -7646,7 +7647,7 @@ pub fn compile_instr(
             
             if let Type::FPType(to_len) = *operand.get_type(tys) {
                 match (&**to_type,to_len) {
-                    (Type::IntegerType { bits: 32 },llvm_ir::types::FPType::Single) => {
+                    (Type::IntegerType { bits: 32 },FPType::Single) => {
                         let dest = ScoreHolder::from_local_name(dest.clone(),4);
                         
                         // shift the significand left
