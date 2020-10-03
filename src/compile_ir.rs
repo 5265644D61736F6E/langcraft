@@ -2261,6 +2261,42 @@ fn compile_lshr(
         ));
 
         cmds
+    } else if let Type::VectorType { element_type, num_elements } = &*op0_type {
+        if matches!(&**element_type,Type::IntegerType { bits: 64 }) {
+            let mut dest = ScoreHolder::from_local_name(dest.clone(), num_elements * 8).into_iter();
+            let (tmp, op1) = eval_operand(operand1, globals, tys);
+            let op1 = &op1[0];
+            cmds.extend(tmp);
+            
+            let mut op0 = op0.into_iter();
+
+            for i in 0..*num_elements {
+                cmds.push(assign(param(0, 0), op0.next().unwrap()));
+                cmds.push(assign(param(0, 1), op0.next().unwrap()));
+                cmds.push(assign(param(1, 0), op1.clone()));
+                cmds.push(
+                    McFuncCall {
+                        id: McFuncId::new("intrinsic:lshr64"),
+                    }
+                    .into(),
+                );
+                cmds.push(assign(dest.next().unwrap(), param(0, 0)));
+                cmds.push(assign(dest.next().unwrap(), param(0, 1)));
+            }
+            
+            cmds
+        } else if let Type::IntegerType { bits } = &**element_type {
+            dumploc(debugloc);
+            eprintln!("[ERR] Can not shift a vector of {}-bit integers",bits);
+            
+            cmds
+        } else {
+            dumploc(debugloc);
+            eprintln!("[ERR] Can not shift a vector of {:?}",element_type);
+            eprintln!("{}",unreach_msg);
+            
+            cmds
+        }
     } else {
         if let Type::IntegerType { bits } = &*op0_type {
             // this error was moved down
