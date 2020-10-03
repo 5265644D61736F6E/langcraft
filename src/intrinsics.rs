@@ -139,6 +139,7 @@ static INTRINSIC_STRS: &[(&str, &str)] = &[
     ("intrinsic:ftoi32", include_str!("intrinsic/ftoi32.mcfunction")),
     
     ("intrinsic:fmul", include_str!("intrinsic/fmul.mcfunction")),
+    ("intrinsic:fdiv", include_str!("intrinsic/fdiv.mcfunction")),
     
     ("intrinsic:udiv64", include_str!("intrinsic/udiv64.mcfunction")),
     ("intrinsic:udiv64_tryset", include_str!("intrinsic/udiv64_tryset.mcfunction")),

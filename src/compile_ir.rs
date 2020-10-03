@@ -7307,10 +7307,49 @@ pub fn compile_instr(
                 vec![]
             }
         }
-        Instruction::FDiv(llvm_ir::instruction::FDiv {..}) => {
-            eprintln!("[ERR] Floating point divide not supported");
-
-            Vec::new()
+        Instruction::FDiv(llvm_ir::instruction::FDiv {
+            operand0,
+            operand1,
+            dest,
+            debugloc,
+        }) => {
+            let (mut cmds,op0) = eval_operand(operand0,globals,tys);
+            let (op1_cmds,op1) = eval_operand(operand1,globals,tys);
+            
+            cmds.extend(op1_cmds);
+            
+            if operand0.get_type(tys) == operand1.get_type(tys) {
+                if let Type::FPType(precision) = *operand0.get_type(tys) {
+                    match precision {
+                        llvm_ir::types::FPType::Single => {
+                            cmds.extend(vec![
+                                assign(param(0,0),op0[0].clone()),
+                                assign(param(1,0),op1[0].clone()),
+                                McFuncCall {
+                                    id: McFuncId::new("intrinsic:fdiv"),
+                                }
+                                .into(),
+                                assign(ScoreHolder::from_local_name(dest.clone(),4)[0].clone(),param(0,0))
+                            ]);
+                            
+                            cmds
+                        }
+                        _ => {
+                            dumploc(debugloc);
+                            eprintln!("[ERR] {:?} precision floating point divide is unsupported",precision);
+                            cmds
+                        }
+                    }
+                } else {
+                    dumploc(debugloc);
+                    eprintln!("[ERR] Floating point divide can only divide floating points");
+                    cmds
+                }
+            } else {
+                dumploc(debugloc);
+                eprintln!("[ERR] Floating point divide is unsupported for differing types");
+                vec![]
+            }
         }
         Instruction::FCmp(llvm_ir::instruction::FCmp {
             predicate,
