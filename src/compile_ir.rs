@@ -7749,6 +7749,8 @@ pub fn eval_constant(
                     .unwrap_or_else(|| panic!("failed to get {:?}", name))
                     .0;
                 MaybeConst::Const(addr as i32)
+            } else if let Constant::GetElementPtr(g) = &**operand {
+                MaybeConst::Const(getelementptr_const(&g, globals, tys) as i32)
             } else {
                 eprintln!("[ERR] Pointer {:?} to integer is unsupported",operand);
                 MaybeConst::Const(0)
