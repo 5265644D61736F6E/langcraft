@@ -1337,13 +1337,10 @@ pub fn make_zeroed(ty: &Type, tys: &Types) -> Constant {
             bits: *bits,
             value: 0,
         },
-        Type::PointerType { .. } => {
-            eprintln!("[ERR] Zero-initialized pointer is not supported");
-            Constant::Int {
-                bits: 32,
-                value: 0,
-            }
-        }
+        Type::PointerType { .. } => Constant::Int {
+            bits: 32,
+            value: 0,
+        },
         _ => todo!("{:?}", ty),
     }
 }
