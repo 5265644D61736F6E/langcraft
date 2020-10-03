@@ -2125,6 +2125,52 @@ fn compile_shl(
         };
 
         cmds
+    } else if let Type::VectorType { element_type, num_elements } = &*operand0.get_type(tys) {
+        let (mut cmds, op0) = eval_operand(operand0, globals, tys);
+        let (mut cmds_op1, op1) = eval_operand(operand1, globals, tys);
+        cmds.extend(cmds_op1);
+        
+        if matches!(&**element_type,Type::IntegerType { bits: 32 }) {
+            let dests = ScoreHolder::from_local_name(dest.clone(), 4 * num_elements);
+            
+            for i in 0..*num_elements {
+                // TODO manage constants better
+                cmds.extend(vec![
+                    assign(param(0,0),op0[i].clone()),
+                    assign(param(1,0),op1[0].clone()),
+                    McFuncCall {
+                        id: McFuncId::new("intrinsic:shl"),
+                    }.into(),
+                    assign(dests[i].clone(),param(0,0)),
+                ]);
+            }
+            
+            cmds
+        } else if matches!(&**element_type,Type::IntegerType { bits: 64 }) {
+            let dests = ScoreHolder::from_local_name(dest.clone(), 8 * num_elements);
+            
+            for i in 0..*num_elements {
+                // TODO manage constants better
+                cmds.extend(vec![
+                    assign(param(0,0),op0[i * 2].clone()),
+                    assign(param(0,1),op0[i * 2 + 1].clone()),
+                    assign(param(1,0),op0[0].clone()),
+                    McFuncCall {
+                        id: McFuncId::new("intrinsic:shl64"),
+                    }.into(),
+                    assign(dests[i * 2].clone(),param(0,0)),
+                    assign(dests[i * 2 + 1].clone(),param(0,1)),
+                ]);
+            }
+            
+            cmds
+        } else if let Type::IntegerType { bits } = &**element_type {
+            eprintln!("[ERR] Vectors with {}-bit integer elements are unsupported",bits);
+            vec![]
+        } else {
+            eprintln!("[ERR] Vectors with elements of type {:?} are unsupported",&*element_type);
+            vec![]
+        }
     } else {
         let op0_type = operand0.get_type(tys);
 
