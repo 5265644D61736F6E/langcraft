@@ -7777,10 +7777,54 @@ pub fn compile_instr(
                 Vec::new()
             }
         }
-        Instruction::SIToFP(llvm_ir::instruction::SIToFP {..}) => {
-            eprintln!("[ERR] Signed int to floating point not supported");
-
-            Vec::new()
+        Instruction::SIToFP(llvm_ir::instruction::SIToFP {
+            operand,
+            to_type,
+            dest,
+            debugloc
+        }) => {
+            let (mut cmds,oper) = eval_operand(operand,globals,tys);
+            
+            if let Type::FPType(to_len) = &**to_type {
+                match (&*operand.get_type(tys),to_len) {
+                    (Type::IntegerType { bits: 32 },FPType::Double) => {
+                        let dest = ScoreHolder::from_local_name(dest.clone(),8);
+                        
+                        // shift the significand left
+                        cmds.push(assign(param(0,0),oper[0].clone()));
+                        cmds.push(
+                            McFuncCall {
+                                id: McFuncId::new("intrinsic:itod"),
+                            }
+                            .into(),
+                        );
+                        cmds.push(assign(dest[0].clone(),param(0,0)));
+                        cmds.push(assign(dest[1].clone(),param(0,1)));
+                        
+                        cmds
+                    }
+                    (Type::IntegerType { bits },FPType::Double) => {
+                        dumploc(debugloc);
+                        eprintln!("[ERR] Signed integer to double precision floating point is not supported for {}-bit integer types.",bits);
+                        Vec::new()
+                    }
+                    (Type::IntegerType { bits },precision) => {
+                        dumploc(debugloc);
+                        eprintln!("[ERR] Unsigned {}-bit integer to {:?} precision floating point is unsupported.",bits,precision);
+                        Vec::new()
+                    }
+                    (_,_) => {
+                        dumploc(debugloc);
+                        eprintln!("[ERR] Unsigned integer to floating point is only supported for integer types.");
+                        Vec::new()
+                    }
+                }
+            } else {
+                dumploc(debugloc);
+                eprintln!("[ERR] Unsigned integer to floating point is only supported for floating point types.");
+                eprintln!("{}",unreach_msg);
+                Vec::new()
+            }
         }
         Instruction::FPToUI(FPToUI {
             operand,
