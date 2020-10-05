@@ -8,7 +8,8 @@
 # store the sign bit
 scoreboard players set %sign_stof rust 0
 execute if score %param0%0 rust matches ..-1 run scoreboard players set %sign_stof rust 1
-execute unless score %param0%0 rust matches 0..0 run scoreboard players add %param0%0 rust -2147483648
+execute unless score %param0%0 rust matches 0..0 run scoreboard players add %param0%0 rust 1073741824
+execute unless score %param0%0 rust matches 0..0 run scoreboard players add %param0%0 rust 1073741824
 
 # get the exponent
 execute if score %param0%0 rust matches 1..1 run scoreboard players set %temp0_utof rust 0
@@ -61,4 +62,5 @@ scoreboard players operation %temp0_utof rust *= %%1048576 rust
 scoreboard players operation %param0%1 rust += %temp0_utof rust
 
 # add the sign bit
-execute unless score %sign_stof rust matches 0..0 run scoreboard players add %param0%1 rust -2147483648
+execute unless score %sign_stof rust matches 0..0 run scoreboard players add %param0%1 rust 1073741824
+execute unless score %sign_stof rust matches 0..0 run scoreboard players add %param0%1 rust 1073741824
