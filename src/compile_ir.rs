@@ -6885,7 +6885,7 @@ pub fn compile_instr(
                             if i % element_to_size == 0 {
                                 cmds.push(assign(dst[i].clone(), op[i / element_to_size].clone()));
                             } else {
-                                cmds.push(assign(dst[i].clone(), 0));
+                                cmds.push(assign_lit(dst[i].clone(), 0));
                             }
                         }
                     } else {
