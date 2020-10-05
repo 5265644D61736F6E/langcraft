@@ -6861,22 +6861,41 @@ pub fn compile_instr(
                     cmds.push(assign_lit(dst, 0));
                 }
             } else if op.len() == 2 {
-                cmds.push(assign(dst[0].clone(), op[0].clone()));
-                cmds.push(assign(dst[1].clone(), op[1].clone()));
-
                 if let Type::IntegerType { bits } = &*operand.get_type(tys) {
+                    cmds.push(assign(dst[0].clone(), op[0].clone()));
+                    cmds.push(assign(dst[1].clone(), op[1].clone()));
+
                     if *bits < 64 {
                         assert!(*bits > 32);
                         cmds.push(make_op_lit(dst[1].clone(), "%=", 1 << (bits - 32)));
                     }
+
+                    for dst in dst[2..].iter().cloned() {
+                        cmds.push(assign_lit(dst, 0));
+                    }
+                } else if let Type::VectorType { element_type, num_elements } = &*operand.get_type(tys) {
+                    if let Type::IntegerType { bits: 32 } = &**element_type {
+                        let element_to_size = to_size / num_elements;
+                        
+                        assert_eq!(element_to_size % 4,0);
+                        
+                        let element_to_size = element_to_size / 4;
+                        
+                        for i in 0..dst.len() {
+                            if i % element_to_size == 0 {
+                                cmds.push(assign(dst[i].clone(), op[i / element_to_size].clone()));
+                            } else {
+                                cmds.push(assign(dst[i].clone(), 0));
+                            }
+                        }
+                    } else {
+                        dumploc(debugloc);
+                        eprintln!("[ERR] Cannot zero-extend this vector");
+                    }
                 } else {
                     dumploc(debugloc);
-                    eprintln!("[ERR] Cannot zero-extend this vector");
+                    eprintln!("[ERR] Can only zero-extend an integer or vector");
                 };
-
-                for dst in dst[2..].iter().cloned() {
-                    cmds.push(assign_lit(dst, 0));
-                }
             } else {
                 todo!("{:?} -> {:?}", operand, to_type)
             }
