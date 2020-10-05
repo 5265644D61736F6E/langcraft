@@ -6851,6 +6851,40 @@ pub fn compile_instr(
                             eprintln!("[ERR] Zero extension is only implemented for 4-element vectors and integers");
                         }
                     }
+                    Type::VectorType { element_type, num_elements: 2 } if matches!(&**element_type, Type::IntegerType { bits: 8 }) => {
+                        let element_to_size = to_size / 2;
+                        
+                        let temp0 = get_unique_holder();
+                        let temp1 = get_unique_holder();
+                        
+                        let score_const = get_unique_holder();
+                        
+                        cmds.extend(vec![
+                            // make temporary variables
+                            assign(temp0.clone(),op[0].clone()),
+                            assign(temp1.clone(),op[0].clone()),
+                            
+                            // shift to low byte
+                            assign_lit(score_const.clone(),256),
+                            make_op(temp1.clone(),"/=",score_const.clone()),
+                            make_op(temp0.clone(),"%=",score_const.clone()),
+                            make_op(temp1.clone(),"%=",score_const.clone()),
+                            
+                            // shift into place
+                            assign_lit(score_const.clone(),1 << (element_to_size % 4 * 8)),
+                            make_op(temp1.clone(),"*=",score_const),
+                            
+                            // set the appropriate destination words
+                            assign(dst[0].clone(),temp0),
+                            assign(dst[element_to_size / 4].clone(),temp1)
+                        ]);
+                        
+                        for i in 0..to_size {
+                            if i % element_to_size != 0 {
+                                cmds.push(assign_lit(dst[i].clone(),0));
+                            }
+                        }
+                    }
                     _ => {
                         dumploc(debugloc);
                         eprintln!("[ERR] Zero extension is only implemented for 4-element vectors and integers");
