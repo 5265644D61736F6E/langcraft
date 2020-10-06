@@ -2127,7 +2127,7 @@ fn compile_shl(
         cmds
     } else if let Type::VectorType { element_type, num_elements } = &*operand0.get_type(tys) {
         let (mut cmds, op0) = eval_operand(operand0, globals, tys);
-        let (mut cmds_op1, op1) = eval_operand(operand1, globals, tys);
+        let (cmds_op1, op1) = eval_operand(operand1, globals, tys);
         cmds.extend(cmds_op1);
         
         if matches!(&**element_type,Type::IntegerType { bits: 32 }) {
@@ -3243,7 +3243,7 @@ fn compile_call(
         if let Operand::ConstantOperand(oper) = function {
                 if let Constant::BitCast(bc) = &**oper {
                     // assume that the error was already printed out
-                } else if let Constant::GlobalReference { name: Name::Name(name), ty } = &**oper {
+                } else if let Constant::GlobalReference { name: Name::Name(_), ty } = &**oper {
                     if let Type::FuncType { result_type, is_var_arg: true, .. } = &**ty {
                         eprintln!("[ERR] Va-args function calls not supported");
                     } else {
@@ -4251,7 +4251,7 @@ pub fn compile_arithmetic(
                 cmds.extend(add_128_bit(op0_0, op0_1, op0_2, op0_3, op1_neg_0, op1_neg_1, op1_neg_2, op1_neg_3, dest.clone()));
             }
             ScoreOpKind::MulAssign => {
-                let mut dest = ScoreHolder::from_local_name(dest.clone(), 16);
+                let dest = ScoreHolder::from_local_name(dest.clone(), 16);
                 
                 cmds.extend(vec![
                     assign(param(0,0),op0_0),
@@ -6337,7 +6337,6 @@ pub fn compile_instr(
             operand,
             to_type,
             dest,
-            debugloc,
             ..
         }) => {
             let (mut cmds, op) = eval_operand(operand, globals, tys);
@@ -7365,9 +7364,10 @@ pub fn compile_instr(
         Instruction::LandingPad(LandingPad {
             debugloc,
             result_type,
-            clauses,
+            // clauses,
             dest,
-            cleanup
+            cleanup,
+            ..
         }) => {
             if !cleanup {
                 dumploc(debugloc);
@@ -8148,7 +8148,7 @@ pub fn eval_constant(
                 .iter()
                 .map(|e| {
                     if e.get_type(tys) == tys.i8() || (Type::IntegerType { bits: 1 }) == *e.get_type(tys) {
-                        if let Constant::Int { bits, value } = &**e {
+                        if let Constant::Int { bits: _, value } = &**e {
                             Some(*value as u8)
                         } else {
                             todo!()
