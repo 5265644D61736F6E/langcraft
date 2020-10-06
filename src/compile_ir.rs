@@ -8151,6 +8151,30 @@ pub fn eval_constant(
                 } else {
                     todo!("{:?} {}", element_type, num_elements)
                 }
+            } else if let Type::StructType { element_types, is_packed: false } = &**t {
+                let num = get_unique_num();
+                let mut size = 0;
+                
+                // be safe, check for non-integers
+                for elem_type in element_types.iter() {
+                    if let Type::IntegerType { bits } = &**elem_type {
+                        size += (bits + 31) / 32; // ceiling divide
+                    } else {
+                        eprintln!("[ERR] AggregateZero for structures is only implemented for integers");
+                    }
+                }
+                
+                // use the with_capacity initializer for better efficiency in pushing
+                let mut cmds = Vec::with_capacity(size as usize);
+                let mut holders = Vec::with_capacity(size as usize);
+                
+                for i in 0..size {
+                    let holder = ScoreHolder::new(format!("%temp{}%{}", num, i)).unwrap();
+                    cmds.push(assign_lit(holder.clone(),0));
+                    holders.push(holder);
+                }
+                
+                MaybeConst::NonConst(cmds,holders)
             } else {
                 eprintln!("[ERR] AggregateZero is only implemented for vectors");
                 MaybeConst::Const(0)
