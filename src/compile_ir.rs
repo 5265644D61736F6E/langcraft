@@ -3243,12 +3243,6 @@ fn compile_call(
         if let Operand::ConstantOperand(oper) = function {
                 if let Constant::BitCast(_) = &**oper {
                     // assume that the error was already printed out
-                } else if let Constant::GlobalReference { name: Name::Name(_), ty } = &**oper {
-                    if let Type::FuncType { result_type, is_var_arg: true, .. } = &**ty {
-                        eprintln!("[ERR] Va-args function calls not supported");
-                    } else {
-                        eprintln!("[ERR] {:?} not supported", ty);
-                    }
                 } else {
                     eprintln!("[ERR] {:?} not supported", oper);
                 }
@@ -7351,14 +7345,38 @@ pub fn compile_instr(
             Vec::new()
         }
         Instruction::FPTrunc(llvm_ir::instruction::FPTrunc {
-            operand: _,
-            to_type: _,
-            dest: _,
-            debugloc: _
+            operand,
+            to_type,
+            dest,
+            debugloc
         }) => {
-            eprintln!("[ERR] FPTrunc not supported");
-
-            Vec::new()
+            match (&*operand.get_type(tys),&**to_type) {
+                (Type::FPType(FPType::Double),Type::FPType(FPType::Single)) => {
+                    let (mut cmds, op) = eval_operand(operand,globals,tys);
+                    let dest = ScoreHolder::from_local_name(dest.clone(), 4);
+                    
+                    cmds.extend(vec![
+                        assign(param(0, 0),op[0].clone()),
+                        assign(param(0, 1),op[1].clone()),
+                        McFuncCall {
+                            id: "intrinsic:dtos".parse().unwrap()
+                        }.into(),
+                        assign(dest[0].clone(),param(0, 0))
+                    ]);
+                    
+                    cmds
+                }
+                (Type::FPType(from),Type::FPType(to)) => {
+                    dumploc(debugloc);
+                    eprintln!("[ERR] FPTrunc from {:?} precision to {:?} precision is unsupported.",from,to);
+                    vec![]
+                }
+                (_,_) => {
+                    dumploc(debugloc);
+                    eprintln!("[ERR] FPTrunc is only supported for floating points.");
+                    vec![]
+                }
+            }
         }
         Instruction::LandingPad(LandingPad {
             debugloc,

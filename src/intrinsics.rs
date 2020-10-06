@@ -131,6 +131,7 @@ static INTRINSIC_STRS: &[(&str, &str)] = &[
     ),
     
     ("intrinsic:fext/stod", include_str!("intrinsic/fext/stod.mcfunction")),
+    ("intrinsic:dtos", include_str!("intrinsic/dtos.mcfunction")),
     ("intrinsic:utof", include_str!("intrinsic/utof.mcfunction")),
     ("intrinsic:itod", include_str!("intrinsic/itod.mcfunction")),
     ("intrinsic:u64tof", include_str!("intrinsic/u64tof.mcfunction")),
