@@ -4448,8 +4448,6 @@ pub fn type_layout(ty: &Type, tys: &Types) -> Layout {
         Type::PointerType { .. } => Layout::from_size_align(4, 4).unwrap(),
         Type::VoidType => Layout::from_size_align(0, 4).unwrap(),
         Type::FPType(precision) => {
-            eprintln!("[WARN] Floating point not supported");
-            
             match precision {
                 FPType::Half => Layout::from_size_align(2,4).unwrap(),
                 FPType::Single => Layout::from_size_align(4,4).unwrap(),
