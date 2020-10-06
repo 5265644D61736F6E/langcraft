@@ -2270,7 +2270,7 @@ fn compile_lshr(
             
             let mut op0 = op0.into_iter();
 
-            for i in 0..*num_elements {
+            for _ in 0..*num_elements {
                 cmds.push(assign(param(0, 0), op0.next().unwrap()));
                 cmds.push(assign(param(0, 1), op0.next().unwrap()));
                 cmds.push(assign(param(1, 0), op1.clone()));
@@ -2298,7 +2298,7 @@ fn compile_lshr(
             cmds
         }
     } else {
-        if let Type::IntegerType { bits } = &*op0_type {
+        if let Type::IntegerType { .. } = &*op0_type {
             // this error was moved down
         } else {
             dumploc(debugloc);
@@ -2399,7 +2399,7 @@ fn compile_ashr(
 
         cmds
     } else {
-        if let Type::IntegerType { bits } = &*op0_type {
+        if let Type::IntegerType { .. } = &*op0_type {
             // this error was moved down
         } else {
             dumploc(debugloc);
@@ -3241,7 +3241,7 @@ fn compile_call(
         dumploc(debugloc);
         
         if let Operand::ConstantOperand(oper) = function {
-                if let Constant::BitCast(bc) = &**oper {
+                if let Constant::BitCast(_) = &**oper {
                     // assume that the error was already printed out
                 } else if let Constant::GlobalReference { name: Name::Name(_), ty } = &**oper {
                     if let Type::FuncType { result_type, is_var_arg: true, .. } = &**ty {
@@ -3490,13 +3490,12 @@ fn reify_block(AbstractBlock { needs_prolog, mut body, term, parent }: AbstractB
         let mut prolog = save_regs(clobbers.clone());
 
         if parent.is_var_arg {
-            for (idx, arg) in parent.parameters.iter().enumerate() {
+            for arg in parent.parameters.iter() {
                 let arg_size = type_layout(&arg.ty, tys).size();
 
-                for (arg_word, arg_holder) in
+                for arg_holder in
                     ScoreHolder::from_local_name(arg.name.clone(), arg_size)
                         .into_iter()
-                        .enumerate()
                 {
                     prolog.push(assign(ptr(),argptr()));
                     prolog.push(
