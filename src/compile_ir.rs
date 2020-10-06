@@ -7612,7 +7612,7 @@ pub fn compile_instr(
             eprintln!("[WARN] Special floating point numbers are unimplemented.");
             
             let (mut cmds,op0) = eval_operand(operand0,globals,tys);
-            let (cmds_new,op1) = eval_operand(operand0,globals,tys);
+            let (cmds_new,op1) = eval_operand(operand1,globals,tys);
             cmds.extend(cmds_new);
             
             let dest = &ScoreHolder::from_local_name(dest.clone(),1)[0];
