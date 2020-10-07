@@ -23,6 +23,7 @@ use llvm_ir::instruction::{
 };
 use llvm_ir::function::ParameterAttribute;
 use llvm_ir::module::GlobalVariable;
+use llvm_ir::module::GlobalAlias;
 use llvm_ir::terminator::{Br, CondBr, Ret, Switch, Unreachable};
 use llvm_ir::types::{Typed, TypeRef, Types, NamedStructDef, FPType};
 use llvm_ir::{
@@ -694,7 +695,7 @@ pub fn compile_module(module: &Module, options: &BuildOptions) -> Vec<McFunction
     
     // Step 1: Lay out global variables
     let mut alloc = StaticAllocator(4);
-    let mut globals = global_var_layout(&module.global_vars, &module.functions, &mut alloc, &module.types);
+    let mut globals = global_var_layout(&module.global_vars, &module.global_aliases, &module.functions, &mut alloc, &module.types);
 
     // Step 2: Convert LLVM functions to abstract blocks
     let (funcs, clobber_list, func_starts) = compile_module_abstract(module, options, &globals);
@@ -1277,7 +1278,7 @@ fn compile_global_var_init<'a>(
     cmds
 }
 
-fn global_var_layout<'a>(v: &'a [GlobalVariable], funcs: &[Function], alloc: &mut StaticAllocator, tys: &Types) -> GlobalVarList<'a> {
+fn global_var_layout<'a>(v: &'a [GlobalVariable], aliases: &'a [GlobalAlias],funcs: &[Function], alloc: &mut StaticAllocator, tys: &Types) -> GlobalVarList<'a> {
     let mut result = HashMap::new();
     for v in v.iter() {
         if v.initializer.is_none() {
@@ -1297,6 +1298,23 @@ fn global_var_layout<'a>(v: &'a [GlobalVariable], funcs: &[Function], alloc: &mu
     for func in funcs.iter() {
         let name = Box::leak(Box::new(Name::Name(Box::new(func.name.clone()))));
         result.insert(name, (u32::MAX, None));
+    }
+    
+    // aliases may be to functions
+    for alias in aliases.iter() {
+        if let Constant::GlobalReference { name, .. } = &*alias.aliasee {
+            result.insert(&alias.name,(result.get(name).unwrap().0, None));
+        } else {
+            eprint!("[WARN] ");
+            
+            if let Name::Name(name) = &alias.name {
+                eprint!("{}",name);
+            } else if let Name::Number(num) = alias.name {
+                eprint!("{}",num);
+            }
+            
+            eprintln!(" is an alias to {:?}",alias.aliasee);
+        }
     }
 
     result
