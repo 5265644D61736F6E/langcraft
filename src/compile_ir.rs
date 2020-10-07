@@ -7122,8 +7122,8 @@ pub fn compile_instr(
             operand,
             to_type,
             dest,
-            ..
-        }) if to_type.as_ref() == &Type::IntegerType { bits: 32 } => {
+            debugloc
+        }) => if to_type.as_ref() == (&Type::IntegerType { bits: 32 }) {
             if !matches!(&*operand.get_type(tys), Type::PointerType{ .. }) {
                 todo!("{:?}", operand)
             }
@@ -7139,7 +7139,27 @@ pub fn compile_instr(
             cmds.push(assign(dest, op));
 
             cmds
-        }
+        } else if let Type::VectorType { element_type, num_elements } = &**to_type {
+            if let Type::IntegerType { bits: 32 } = &**element_type {
+                let (mut cmds, op) = eval_operand(operand, globals, tys);
+                let dest = ScoreHolder::from_local_name(dest.clone(), 4 * num_elements);
+                
+                // reallocate the vector once
+                cmds.reserve(*num_elements);
+                
+                for (op, dest) in op.iter().zip(dest) {
+                    cmds.push(assign(dest.clone(), op.clone()));
+                }
+                
+                cmds
+            } else {
+                vec![]
+            }
+        } else {
+            dumploc(debugloc);
+            eprintln!("[ERR] PtrToInt is only supported for integers and vectors.");
+            vec![]
+        },
         Instruction::IntToPtr(IntToPtr {
             operand,
             to_type,
@@ -8077,11 +8097,6 @@ pub fn compile_instr(
                 eprintln!("{}",unreach_msg);
                 Vec::new()
             }
-        }
-        Instruction::PtrToInt(llvm_ir::instruction::PtrToInt {..}) => {
-            eprintln!("[ERR] Pointer to integer not supported");
-
-            Vec::new()
         }
         _ => {
             eprintln!("[ERR] instruction {:?} not supported", instr);
