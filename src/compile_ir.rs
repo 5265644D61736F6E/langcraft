@@ -4941,9 +4941,17 @@ fn compile_getelementptr(
 
                 ty = element_type;
             }
-            Type::VectorType { .. } => {
-                dumploc(debugloc);
-                eprintln!("[WARN] GetElementPtr for a vector is unsupported");
+            Type::VectorType { element_type, num_elements } => {
+                let elem_size = type_layout(&element_type, tys).pad_to_align().size();
+                let index = if let MaybeConst::Const(c) = eval_maybe_const(index, globals, tys) {
+                    c
+                } else {
+                    eprintln!("[ERR] GetElementPtr cannot dynamically index a vector.");
+                    0
+                };
+                
+                assert!((index as usize) < num_elements);
+                offset += index * elem_size as i32;
             }
             _ => todo!("{:?}", ty),
         }
