@@ -4965,6 +4965,59 @@ fn compile_getelementptr(
                     .into(),
                 );
                 cmds
+            } else if addr.len() == 2 {
+                let dest = ScoreHolder::from_local_name(dest_all.clone(), 8);
+                cmds.extend(vec![
+                    assign(dest[0].clone(), addr[0].clone()),
+                    assign(dest[1].clone(), addr[1].clone()),
+                    make_op_lit(dest[0].clone(), "+=", offset as i32)
+                ]);
+                
+                // carry over
+                if offset < 0 {
+                    let inc = make_op_lit(dest[1].clone(), "+=", 1);
+                    let mut sign_and = Execute::new();
+                    sign_and.with_if(ExecuteCondition::Score {
+                        target: addr[0].clone().into(),
+                        target_obj: OBJECTIVE.to_string(),
+                        kind: ExecuteCondKind::Matches((..=-1).into())
+                    });
+                    sign_and.with_run(inc.clone());
+                    
+                    let mut carry_from = Execute::new();
+                    carry_from.with_if(ExecuteCondition::Score {
+                        target: addr[0].clone().into(),
+                        target_obj: OBJECTIVE.to_string(),
+                        kind: ExecuteCondKind::Matches((0..).into())
+                    });
+                    carry_from.with_if(ExecuteCondition::Score {
+                        target: dest[0].clone().into(),
+                        target_obj: OBJECTIVE.to_string(),
+                        kind: ExecuteCondKind::Matches((0..).into())
+                    });
+                    carry_from.with_run(inc);
+                    
+                    cmds.extend(vec![
+                        sign_and.into(),
+                        carry_from.into()
+                    ]);
+                } else {
+                    let mut carry_from = Execute::new();
+                    carry_from.with_if(ExecuteCondition::Score {
+                        target: addr[0].clone().into(),
+                        target_obj: OBJECTIVE.to_string(),
+                        kind: ExecuteCondKind::Matches((..=-1).into())
+                    });
+                    carry_from.with_if(ExecuteCondition::Score {
+                        target: dest[0].clone().into(),
+                        target_obj: OBJECTIVE.to_string(),
+                        kind: ExecuteCondKind::Matches((0..).into())
+                    });
+                    carry_from.with_run(make_op_lit(dest[1].clone(), "+=", 1));
+                    cmds.push(carry_from.into());
+                }
+                
+                cmds
             } else {
                 eprintln!("[ERR] GetElementPtr is not supported for {}-bit pointers",addr.len() * 32);
                 
