@@ -4188,6 +4188,34 @@ pub fn compile_arithmetic(
             ScoreOpKind::MulAssign => {
                 cmds.extend(mul_64_bit(op0_lo, op0_hi, op1_lo, op1_hi, dest.clone()));
             }
+            ScoreOpKind::DivAssign => {
+                let dest = ScoreHolder::from_local_name(dest.clone(), 8);
+                cmds.extend(vec![
+                    assign(param(0, 0),op0_lo),
+                    assign(param(0, 1),op0_hi),
+                    assign(param(1, 0),op1_lo),
+                    assign(param(1, 1),op1_hi),
+                    McFuncCall {
+                        id: "intrinsic:idiv64".parse().unwrap()
+                    }.into(),
+                    assign(param(0, 0),dest[0].clone()),
+                    assign(param(0, 1),dest[1].clone()),
+                ]);
+            }
+            ScoreOpKind::ModAssign => {
+                let dest = ScoreHolder::from_local_name(dest.clone(), 8);
+                cmds.extend(vec![
+                    assign(param(0, 0),op0_lo),
+                    assign(param(0, 1),op0_hi),
+                    assign(param(1, 0),op1_lo),
+                    assign(param(1, 1),op1_hi),
+                    McFuncCall {
+                        id: "intrinsic:irem64".parse().unwrap()
+                    }.into(),
+                    assign(param(0, 0),dest[0].clone()),
+                    assign(param(0, 1),dest[1].clone()),
+                ]);
+            }
             _ => eprintln!("[ERR] 64-bit {:?} is unsupported", kind),
         }
 
