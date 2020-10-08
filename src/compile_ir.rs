@@ -4943,15 +4943,30 @@ fn compile_getelementptr(
             }
             Type::VectorType { element_type, num_elements } => {
                 let elem_size = type_layout(&element_type, tys).pad_to_align().size();
-                let index = if let MaybeConst::Const(c) = eval_maybe_const(index, globals, tys) {
-                    c
-                } else {
-                    eprintln!("[ERR] GetElementPtr cannot dynamically index a vector.");
-                    0
-                };
+                match eval_maybe_const(index, globals, tys) {
+                    MaybeConst::Const(c) => {
+                        assert!((c as usize) < num_elements);
+                        offset += c * elem_size as i32;
+                    }
+                    MaybeConst::NonConst(a, b) => {
+                        cmds.extend(a);
+                        if b.len() == 1 {
+                            cmds.push(make_op(dest.clone(), "+=", b[0].clone()));
+                        } else if b.len() == 2 {
+                            let dest = ScoreHolder::from_local_name(dest_all.clone(), 8);
+                            let (temp0, temp1) = (get_unique_holder(), get_unique_holder());
+                            
+                            cmds.extend(vec![
+                                assign(temp0.clone(), dest[0].clone()),
+                                assign(temp1.clone(), dest[1].clone())
+                            ]);
+                            cmds.extend(add_64_bit(temp0, temp1, b[0].clone(), b[1].clone(), dest_all.clone()));
+                        } else {
+                            eprintln!("[ERR] GetElementPtr cannot dynamically index a vector with a {}-bit integer.",b.len() * 32);
+                        }
+                    }
+                }
                 
-                assert!((index as usize) < num_elements);
-                offset += index * elem_size as i32;
             }
             _ => todo!("{:?}", ty),
         }
@@ -6976,7 +6991,7 @@ pub fn compile_instr(
                             assign(dst[element_to_size / 4].clone(),temp1)
                         ]);
                         
-                        for i in 0..to_size {
+                        for i in 0..(to_size / 4) {
                             if i % element_to_size != 0 {
                                 cmds.push(assign_lit(dst[i].clone(),0));
                             }
@@ -7265,8 +7280,8 @@ pub fn compile_instr(
                             Constant::Int { bits: _, value } => {
                                 let value = *value as usize;
 
-                                let (src0,src1) = if value > op0_len {
-                                    (&op1[(value - op0_len) * 2],&op1[(value - op0_len) * 2 + 1])
+                                let (src0,src1) = if value * 2 > op0_len {
+                                    (&op1[value * 2 - op0_len],&op1[value * 2 + 1 - op0_len])
                                 } else {
                                     (&op0[value * 2],&op0[value * 2 + 1])
                                 };
