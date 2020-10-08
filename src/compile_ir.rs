@@ -580,6 +580,21 @@ fn compile_module_abstract<'a>(module: &'a Module, options: &BuildOptions, globa
     (funcs, clobber_list, func_starts)
 }
 
+fn link_aliases(func_starts: &mut HashMap<String, McFuncId>, aliases: &Vec<GlobalAlias>) {
+    // look for any aliases to functions and form hard links
+    for alias in aliases.iter() {
+        if let Constant::GlobalReference { name: Name::Name(name), .. } = &*alias.aliasee {
+            if func_starts.contains_key(name.as_ref()) {
+                if let Name::Name(alias) = &alias.name {
+                    func_starts.insert(alias.as_ref().clone(),func_starts.get(name.as_ref()).unwrap().clone());
+                } else {
+                    eprintln!("[ERR] Can not alias {} as a non-string",name.as_ref());
+                }
+            }
+        }
+    }
+}
+
 pub fn create_return_func() -> McFunction {
     let mut cmds = Vec::new();
 
@@ -698,7 +713,10 @@ pub fn compile_module(module: &Module, options: &BuildOptions) -> Vec<McFunction
     let mut globals = global_var_layout(&module.global_vars, &module.global_aliases, &module.functions, &mut alloc, &module.types);
 
     // Step 2: Convert LLVM functions to abstract blocks
-    let (funcs, clobber_list, func_starts) = compile_module_abstract(module, options, &globals);
+    let (funcs, clobber_list, mut func_starts) = compile_module_abstract(module, options, &globals);
+    
+    // Step 2.5: Link aliased functions to aliasees
+    link_aliases(&mut func_starts, &module.global_aliases);
 
     for func in funcs.iter() {
         if let Some(dest) = func.get_dest(&func_starts) {
