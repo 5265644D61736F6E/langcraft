@@ -27,7 +27,13 @@ impl AbstractBlock<'_> {
         match self.term.as_ref()? {
             BlockEnd::StaticCall(c) => {
                 assert!(c.starts_with("!FIXUPCALL "));
-                Some(func_starts.get(&c["!FIXUPCALL ".len()..]).unwrap_or_else(|| panic!("failed to get {}", c)).clone())
+                
+                if func_starts.contains_key(&c["!FIXUPCALL ".len()..]) {
+                    Some(func_starts.get(&c["!FIXUPCALL ".len()..]).unwrap_or_else(|| panic!("Could not find {} when it was assumed to be found", c)).clone())
+                } else {
+                    eprintln!("[ERR] Function {} could not be located.",&c["!FIXUPCALL ".len()..]);
+                    None
+                }
             },
             BlockEnd::Normal(Terminator::Br(Br { dest, debugloc: _ })) => Some(FunctionId::new_block(&self.parent.name, dest.clone())),
             BlockEnd::DynCall(_) => None,
