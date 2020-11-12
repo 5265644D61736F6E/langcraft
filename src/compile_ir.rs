@@ -2584,13 +2584,9 @@ fn compile_call(
                 (cmds, None)
             }
             "insert_asm" => {
-                assert_eq!(arguments.len(), 3);
-
+                assert_eq!(arguments.len(), 2);
+                
                 let ptr = arguments[0].clone();
-                let len = arguments[1].clone();
-
-                let len = as_const_32(&len.0).unwrap();
-
 
                 // TODO: this is so so terribly awful
 
@@ -2613,11 +2609,15 @@ fn compile_call(
                         todo!("{:?}", address)
                     };
 
-                    let indices_ok =
-                        indices.len() == 3 &&
-                        *indices[0] == Constant::Int { bits: 32, value: 0 } &&
-                        *indices[1] == Constant::Int { bits: 32, value: 0 } &&
-                        *indices[2] == Constant::Int { bits: 32, value: 0 };
+                    let mut indices_ok = true;
+                    
+                    for index in indices {
+                        if let Constant::Int { bits: 32, value } = &**index {
+                            if *value != 0 {
+                                indices_ok = false;
+                            }
+                        }
+                    }
 
                     if !indices_ok {
                         todo!("{:?}", indices)
@@ -2653,24 +2653,39 @@ fn compile_call(
                     } else {
                         todo!("{:?}", values)
                     }
+                } else if let Constant::Array {
+                    element_type,
+                    elements,
+                } = data.as_ref().unwrap() {
+                    if element_type == &tys.i8() {
+                        elements
+                    } else {
+                        todo!("{:?}", element_type)
+                    }
                 } else {
                     todo!("{:?}", data)
                 };
 
-                let data = data[..len as usize]
-                    .iter()
-                    .map(|d| {
-                        if let Constant::Int { bits: 8, value } = &**d {
-                            *value as u8
-                        } else {
-                            unreachable!()
+                let mut chars = Vec::with_capacity(data.len());
+                        
+                for c in data {
+                    if let Constant::Int { bits: 8, value } = &**c {
+                        if *value == 0 {
+                            chars.shrink_to_fit();
+                            break;
                         }
-                    })
-                    .collect::<Vec<u8>>();
+                        
+                        chars.push(*value as u8);
+                    } else {
+                        eprintln!("[FATAL] Can only parse 8-bit arrays, not arrays of {:?}",&**c);
+                        eprintln!("{}",unreach_msg);
+                        panic!()
+                    }
+                }
 
-                let text = std::str::from_utf8(&data).unwrap();
+                let text = std::str::from_utf8(&chars).unwrap();
 
-                let (mut cmds, arg) = eval_operand(&arguments[2].0, globals, tys);
+                let (mut cmds, arg) = eval_operand(&arguments[1].0, globals, tys);
                 let arg = arg.into_iter().next().unwrap();
 
                 let interpolated = text
