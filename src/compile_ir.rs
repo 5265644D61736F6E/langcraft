@@ -1879,25 +1879,13 @@ fn setup_var_arguments(
                     .into(),
                 );
                 before_cmds.push(write_ptr_const(score));
-                before_cmds.push(make_op_lit(ptr(), "+=", 4));
-                before_cmds.push(
-                    McFuncCall {
-                        id: McFuncId::new("intrinsic:setptr"),
-                    }
-                    .into(),
-                );
-                before_cmds.push(write_ptr_const(0));
-                before_cmds.push(make_op_lit(stackptr(), "+=", 8));
+                before_cmds.push(make_op_lit(stackptr(), "+=", 4));
             }
             MaybeConst::NonConst(cmds, source) => {
                 before_cmds.extend(cmds);
 
                 for source_word in source.clone().into_iter() {
                     before_cmds.extend(push(source_word));
-                }
-                
-                if source.len() % 2 > 0 {
-                    before_cmds.push(make_op_lit(stackptr(), "+=", 4));
                 }
             }
         }
@@ -3126,43 +3114,14 @@ fn compile_call(
             "llvm.va_start" => {
                 let mut before_cmds = setup_arguments(arguments, globals, tys);
                 
-                before_cmds.push(assign(ptr(),param(0,0)));
-                
-                // first part of the struct:
-                // gp_offset (used to iterate over the args)
-                // fp_offset
-                before_cmds.push(
+                before_cmds.extend(vec![
+                    assign(ptr(),param(0,0)),
                     McFuncCall {
                         id: McFuncId::new("intrinsic:setptr")
                     }
-                    .into());
-                before_cmds.push(write_ptr_const(0));
-                before_cmds.push(make_op_lit(ptr(),"+=",4));
-                before_cmds.push(
-                    McFuncCall {
-                        id: McFuncId::new("intrinsic:setptr")
-                    }
-                    .into());
-                before_cmds.push(write_ptr_const(0));
-                before_cmds.push(make_op_lit(ptr(),"+=",8));
-                
-                // second part of the struct:
-                // overflow_arg_area (usually used after 40 va_args)
-                // reg_save_area
-                before_cmds.push(
-                    McFuncCall {
-                        id: McFuncId::new("intrinsic:setptr")
-                    }
-                    .into());
-                before_cmds.push(write_ptr(argptr()));
-                before_cmds.push(make_op_lit(ptr(),"-=",4));
-                before_cmds.push(
-                    McFuncCall {
-                        id: McFuncId::new("intrinsic:setptr")
-                    }
-                    .into());
-                before_cmds.push(make_op_lit(argptr(),"+=",48));
-                before_cmds.push(write_ptr(argptr()));
+                    .into(),
+                    write_ptr(argptr()),
+                ]);
                 
                 (before_cmds, None)
             }
@@ -3534,7 +3493,7 @@ fn reify_block(AbstractBlock { needs_prolog, mut body, term, parent }: AbstractB
                         }
                         .into());
                     prolog.push(read_ptr(arg_holder.clone()));
-                    prolog.push(make_op_lit(argptr(),"+=",8));
+                    prolog.push(make_op_lit(argptr(),"+=",4));
                 }
             }
         } else {
