@@ -590,11 +590,16 @@ fn link_aliases(func_starts: &mut HashMap<String, McFuncId>, aliases: &Vec<Globa
         if let Constant::GlobalReference { name: Name::Name(name), .. } = &*alias.aliasee {
             if func_starts.contains_key(name.as_ref()) {
                 if let Name::Name(alias) = &alias.name {
+                    println!("Aliasing {} as {}",name,alias);
                     func_starts.insert(alias.as_ref().clone(),func_starts.get(name.as_ref()).unwrap().clone());
                 } else {
                     eprintln!("[ERR] Can not alias {} as a non-string",name.as_ref());
                 }
+            } else {
+                eprintln!("[ERR] Cannot alias to non-existant function {}",name);
             }
+        } else {
+            eprintln!("[ERR] Cannot alias to non-function");
         }
     }
 }
