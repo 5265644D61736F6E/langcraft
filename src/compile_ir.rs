@@ -3797,7 +3797,7 @@ fn compile_function<'a>(
         .iter()
         .enumerate()
         .flat_map(|(idx, block)| {
-            println!("Block {}/{}",idx + 1,func.basic_blocks.len());
+            println!("Function {}, Block {}/{}",progress,idx + 1,func.basic_blocks.len());
             
             let mut result = Vec::new();
 
