@@ -3555,8 +3555,14 @@ fn compile_block_end(block_end: &BlockEnd, body_cmds: usize, parent: &Function, 
             } else {
                 assert!(func_name.starts_with("!FIXUPCALL "));
                 let func_name = &func_name["!FIXUPCALL ".len()..];
-                let func_id = func_starts.get(func_name).unwrap().clone();
-                Either::Left(vec![(BlockEdge::None, func_id)])
+                
+                if func_starts.contains_key(func_name) {
+                    let func_id = func_starts.get(func_name).unwrap().clone();
+                    Either::Left(vec![(BlockEdge::None, func_id)])
+                } else {
+                    eprintln!("[ERR] Could not find function {}",func_name);
+                    Either::Right(McFuncId::new("rust:".to_owned() + func_name))
+                }
             }
         }
         BlockEnd::DynCall(func_ptr) => {
