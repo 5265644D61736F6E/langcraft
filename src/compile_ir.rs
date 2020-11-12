@@ -2021,27 +2021,33 @@ fn compile_shl(
                 let tmp2 = get_unique_holder();
                 
                 cmds.push(assign(tmp2.clone(),op0[0].clone()));
-                cmds.push(assign_lit(tmp.clone(),1 << (32 - shift)));
-                cmds.push(
-                    ScoreOp {
-                        target: tmp2.clone().into(),
-                        target_obj: OBJECTIVE.into(),
-                        kind: ScoreOpKind::DivAssign,
-                        source: tmp.into(),
-                        source_obj: OBJECTIVE.into()
-                    }
-                    .into(),
-                );
-                cmds.push(
-                    ScoreOp {
-                        target: dest_hi.into(),
-                        target_obj: OBJECTIVE.into(),
-                        kind: ScoreOpKind::AddAssign,
-                        source: tmp2.into(),
-                        source_obj: OBJECTIVE.into()
-                    }
-                    .into(),
-                );
+                
+                if shift > 0 {
+                    cmds.push(assign_lit(tmp.clone(),1 << (32 - shift)));
+                    
+                    cmds.push(
+                        ScoreOp {
+                            target: tmp2.clone().into(),
+                            target_obj: OBJECTIVE.into(),
+                            kind: ScoreOpKind::DivAssign,
+                            source: tmp.into(),
+                            source_obj: OBJECTIVE.into()
+                        }
+                        .into(),
+                    );
+                    cmds.push(
+                        ScoreOp {
+                            target: dest_hi.into(),
+                            target_obj: OBJECTIVE.into(),
+                            kind: ScoreOpKind::AddAssign,
+                            source: tmp2.into(),
+                            source_obj: OBJECTIVE.into()
+                        }
+                        .into(),
+                    );
+                } else {
+                    eprintln!("[ERR] 64-bit constant SHL not supported with shift by zero");
+                }
             };
             
             if shift < 32 {
@@ -3917,7 +3923,10 @@ pub fn lshr_64_bit_const(
         // temp = (hi & mask) << (32 - amount)
         cmds.push(assign(temp.clone(), op0_hi.clone()));
         cmds.push(make_op_lit(temp.clone(), "%=", 1 << amount));
-        cmds.push(make_op_lit(temp.clone(), "*=", 1 << (32 - amount)));
+        
+        if amount > 0 {
+            cmds.push(make_op_lit(temp.clone(), "*=", 1 << (32 - amount)));
+        }
 
         // hi' = hi lshr amount
         cmds.push(assign(param(0, 0), op0_hi));
