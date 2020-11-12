@@ -469,6 +469,7 @@ pub fn write_ptr(target: ScoreHolder) -> Command {
 pub struct BuildOptions {
     /// Insert a print command at the beginning of each LLVM basic block 
     pub trace_bbs: bool,
+    pub entry: String,
 }
 
 
@@ -750,7 +751,7 @@ pub fn compile_module(module: &Module, options: &BuildOptions) -> Vec<McFunction
     init_cmds.push(assign_lit(stackptr(), alloc.reserve(4) as i32));
     init_cmds.push(assign_lit(stackbaseptr(), 0));
     init_cmds.push(assign_lit(argptr(), 0));
-    init_cmds.extend(make_build_cmds(func_starts.get("main").unwrap()));
+    init_cmds.extend(make_build_cmds(func_starts.get(&options.entry).unwrap()));
 
     let mut all_clobbers = BTreeSet::new();
     for c in clobber_list.values() {

@@ -169,6 +169,7 @@ fn parse_arguments() -> Result<Options, String> {
     let mut force_input = false;
     let mut bc_path = None;
     let mut output_folder = None;
+    let mut entry = "main".to_owned();
 
     let args = std::env::args().skip(1);
 
@@ -186,6 +187,12 @@ fn parse_arguments() -> Result<Options, String> {
                     output_folder = Some(PathBuf::from(tail));
                 } else {
                     return Err(String::from("at most one `--out` argument may be specified"));
+                }
+            } else if arg.starts_with("--entry=") {
+                if entry == "main" {
+                    entry = (&arg["--entry=".len()..]).to_owned();
+                } else {
+                    return Err("The entry point can only be specified once".to_owned());
                 }
             } else if arg == "--help" {
                 // give help text then exit
@@ -230,7 +237,8 @@ fn parse_arguments() -> Result<Options, String> {
         output_folder,
         build_opts: BuildOptions {
             trace_bbs,
-        }
+            entry,
+        },
     })
 }
 
