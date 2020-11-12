@@ -542,7 +542,7 @@ fn compile_module_abstract<'a>(module: &'a Module, options: &BuildOptions, globa
         .functions
         .iter()
         .enumerate()
-        .map(|(n,f)| (f, compile_function(f, &globals, &module.types, options, format!("{}/{}",n,len))))
+        .map(|(n,f)| (f, compile_function(f, &globals, &module.types, options, format!("{}/{}",n + 1,len))))
     {
         clobber_list.insert(
             parent.name.clone(),
@@ -3797,6 +3797,8 @@ fn compile_function<'a>(
         .iter()
         .enumerate()
         .flat_map(|(idx, block)| {
+            println!("Block {}/{}",idx + 1,func.basic_blocks.len());
+            
             let mut result = Vec::new();
 
             let mut sub = 0;
