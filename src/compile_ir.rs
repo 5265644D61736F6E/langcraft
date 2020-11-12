@@ -3387,7 +3387,22 @@ pub(crate) fn compile_terminator(
 
                     tmp
                 }
-                o => todo!("{:?}", o)
+                Type::IntegerType { bits } => {
+                    eprintln!("[ERR] Switch with {}-bit operand is unsupported",bits);
+                    
+                    let tmp = get_unique_holder();
+                    
+                    cmds.push(assign_lit(tmp.clone(),0));
+                    tmp
+                }
+                o => {
+                    eprintln!("[ERR] Switch with {:?} is unsupported",o);
+                    
+                    let tmp = get_unique_holder();
+                    
+                    cmds.push(assign_lit(tmp.clone(),0));
+                    tmp
+                }
             };
 
 
