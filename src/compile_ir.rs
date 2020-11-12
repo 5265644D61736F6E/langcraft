@@ -535,11 +535,14 @@ fn compile_module_abstract<'a>(module: &'a Module, options: &BuildOptions, globa
     let mut after_blocks = Vec::new();
 
     let mut func_starts = HashMap::<String, McFuncId>::new();
+    
+    let len = module.functions.len();
 
     for (parent, (mc_funcs, clobbers)) in module
         .functions
         .iter()
-        .map(|f| (f, compile_function(f, &globals, &module.types, options)))
+        .enumerate()
+        .map(|(n,f)| (f, compile_function(f, &globals, &module.types, options, format!("{}/{}",n,len))))
     {
         clobber_list.insert(
             parent.name.clone(),
@@ -3776,12 +3779,13 @@ fn compile_function<'a>(
     globals: &GlobalVarList,
     tys: &Types,
     options: &BuildOptions,
+    progress: String,
 ) -> (Vec<AbstractBlock<'a>>, HashMap<ScoreHolder, cir::HolderUse>) {
     if func.basic_blocks.is_empty() {
         todo!("functions with no basic blocks");
     }
 
-    println!("Function {}, {}", func.name, func.basic_blocks.len());
+    println!("Function {}: {}, {} blocks", progress, func.name, func.basic_blocks.len());
 
     let mut funcs = func
         .basic_blocks
