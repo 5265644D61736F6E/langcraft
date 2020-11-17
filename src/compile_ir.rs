@@ -6273,6 +6273,7 @@ pub fn compile_instr(
             operand,
             to_type,
             dest,
+            debugloc,
             ..
         }) => {
             let (mut cmds, op) = eval_operand(operand, globals, tys);
