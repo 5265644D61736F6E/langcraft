@@ -8,7 +8,6 @@ static INTRINSIC_STRS: &[(&str, &str)] = &[
     ("intrinsic:lshr128", include_str!("intrinsic/lshr128.mcfunction")),
     ("intrinsic:ashr", include_str!("intrinsic/ashr.mcfunction")),
     ("intrinsic:ashr64", include_str!("intrinsic/ashr64.mcfunction")),
-    ("intrinsic:ashr128", include_str!("intrinsic/ashr128.mcfunction")),
     (
         "intrinsic:lshr/getshift",
         include_str!("intrinsic/lshr/getshift.mcfunction"),
