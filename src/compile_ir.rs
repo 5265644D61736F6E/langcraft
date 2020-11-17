@@ -6273,7 +6273,6 @@ pub fn compile_instr(
             operand,
             to_type,
             dest,
-            debugloc,
             ..
         }) => {
             let (mut cmds, op) = eval_operand(operand, globals, tys);
@@ -6419,56 +6418,6 @@ pub fn compile_instr(
 
                     cmds
                 }
-            } else if let Type::IntegerType { bits: 128 } = &**to_type {
-                let dest = ScoreHolder::from_local_name(dest.clone(), 16);
-
-                if let Type::IntegerType { bits } = &*operand.get_type(tys) {
-                    let words = op.len();
-                    
-                    // transfer the given bits
-                    for (index, op_current) in op.iter().enumerate() {
-                        cmds.push(assign(dest[index].clone(),op_current.clone()));
-                    }
-                    
-                    if bits % 32 > 0 {
-                        // extend within the word
-                        let mut neg_extend = Execute::new();
-                        neg_extend.with_if(ExecuteCondition::Score {
-                            target: dest[words - 1].clone().into(),
-                            target_obj: OBJECTIVE.to_string(),
-                            kind: ExecuteCondKind::Matches(((1 << (bits % 32 - 1))..=(1 << (bits % 32) - 1)).into())
-                        });
-                        
-                        if bits % 32 == 31 {
-                            neg_extend.with_run(make_op_lit(dest[words - 1].clone(),"-=",1073741824));
-                            cmds.push(neg_extend.clone().into());
-                            cmds.push(neg_extend.into());
-                        } else {
-                            neg_extend.with_run(make_op_lit(dest[words - 1].clone(),"-=",1 << (bits % 32)));
-                            cmds.push(neg_extend.into());
-                        }
-                    }
-                    
-                    let if_pred = ExecuteCondition::Score {
-                        target: dest[words - 1].clone().into(),
-                        target_obj: OBJECTIVE.to_string(),
-                        kind: ExecuteCondKind::Matches((..=-1).into())
-                    };
-                    
-                    for ext_word in dest[words..].iter() {
-                        cmds.push(assign_lit(ext_word.clone(),0));
-                        
-                        let mut negate = Execute::new();
-                        negate.with_if(if_pred.clone());
-                        negate.with_run(assign_lit(ext_word.clone(),-1));
-                    }
-                } else {
-                    dumploc(debugloc);
-                    eprintln!("[ERR] Cannot convert non-integer to 128-bit integer");
-                    eprintln!("{}",unreach_msg);
-                }
-                
-                cmds
             } else if let Type::IntegerType { bits: 16 } = &**to_type {
                 let dest = ScoreHolder::from_local_name(dest.clone(), 2);
                 let dest = dest[0].clone();
