@@ -5,8 +5,6 @@ Langcraft is a code generator targeting [Minecraft Data Packs](https://minecraft
 
 #### Warning: This branch doesn't properly handle errors. A working output may be overwritten with a malformed output.
 
-#### Warning: This branch is experimental. Do not expect anything to work.
-
 ### Usage
 ```
 cargo run -- --arg1 --arg2 ./path/to/llvm/bitcode.bc

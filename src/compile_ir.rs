@@ -4084,70 +4084,6 @@ pub fn add_64_bit(
     cmds
 }
 
-pub fn add_128_bit(
-    op0_0: ScoreHolder,
-    op0_1: ScoreHolder,
-    op0_2: ScoreHolder,
-    op0_3: ScoreHolder,
-    op1_0: ScoreHolder,
-    op1_1: ScoreHolder,
-    op1_2: ScoreHolder,
-    op1_3: ScoreHolder,
-    dest: Name,
-) -> Vec<Command> {
-    let mut dest_iter = ScoreHolder::from_local_name(dest, 16).into_iter();
-    let dest_0 = dest_iter.next().unwrap();
-    let dest_1 = dest_iter.next().unwrap();
-    let dest_2 = dest_iter.next().unwrap();
-    let dest_3 = dest_iter.next().unwrap();
-    
-    let carry0 = get_unique_holder();
-    let carry1 = get_unique_holder();
-    let carried = get_unique_holder();
-
-    let mut cmds = Vec::new();
-
-    cmds.push(assign(dest_3.clone(), op0_3));
-    cmds.push(make_op(dest_3.clone(), "+=", op1_3));
-    cmds.push(assign_lit(carry0.clone(), 0));
-
-    cmds.extend(add_32_with_carry(
-        op0_0,
-        op1_0,
-        dest_0,
-        assign_lit(carry0.clone(), 1),
-    ));
-
-    cmds.push(assign_lit(carry1.clone(), 0));
-    cmds.extend(add_32_with_carry(
-        op0_1,
-        carry0,
-        carried.clone(),
-        assign_lit(carry1.clone(), 1),
-    ));
-    cmds.extend(add_32_with_carry(
-        carried.clone(),
-        op1_1,
-        dest_1,
-        assign_lit(carry1.clone(), 1),
-    ));
-
-    cmds.extend(add_32_with_carry(
-        op0_2,
-        carry1,
-        carried.clone(),
-        make_op_lit(dest_3.clone(), "+=", 1),
-    ));
-    cmds.extend(add_32_with_carry(
-        carried,
-        op1_2,
-        dest_2,
-        make_op_lit(dest_3, "+=", 1),
-    ));
-
-    cmds
-}
-
 pub fn compile_arithmetic(
     operand0: &Operand,
     operand1: &Operand,
@@ -4231,23 +4167,6 @@ pub fn compile_arithmetic(
                 ]);
             }
             _ => eprintln!("[ERR] 64-bit {:?} is unsupported", kind),
-        }
-
-        cmds
-    } else if matches!(&*op0_type, Type::IntegerType { bits: 128 }) {
-        let op0_0 = source0[0].clone();
-        let op0_1 = source0[1].clone();
-        let op0_2 = source0[2].clone();
-        let op0_3 = source0[3].clone();
-
-        let op1_0 = source1[0].clone();
-        let op1_1 = source1[1].clone();
-        let op1_2 = source1[2].clone();
-        let op1_3 = source1[3].clone();
-
-        match kind {
-            ScoreOpKind::AddAssign => cmds.extend(add_128_bit(op0_0, op0_1, op0_2, op0_3, op1_0, op1_1, op1_2, op1_3, dest.clone())),
-            _ => eprintln!("[ERR] 128-bit {:?} is unsupported", kind),
         }
 
         cmds
