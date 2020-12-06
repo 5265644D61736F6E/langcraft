@@ -260,12 +260,11 @@ pub(crate) enum BlockEdge {
         inverted: bool,
     },
     SwitchCond {
-        value: ScoreHolder,
-        expected: i32,
+        value: Vec<ScoreHolder>,
+        expected: Vec<i32>,
     },
     SwitchDefault {
-        value: ScoreHolder,
-        not_expected: Vec<i32>,
+        cond: ScoreHolder
     }
 }
 
@@ -289,22 +288,26 @@ impl BlockEdge {
                 }, false)]
             }
             BlockEdge::SwitchCond { value, expected } => {
-                vec![(ExecuteCondition::Score {
-                    target: value.into(),
-                    target_obj: crate::compile_ir::OBJECTIVE.into(),
-                    kind: ExecuteCondKind::Matches((expected..=expected).into())
-                }, false)]
+                assert!(value.len() == expected.len(),"Attempted to add a switch case with different bit lengths");
+                
+                let mut res = Vec::with_capacity(value.len());
+                
+                for (val_i,expected_i) in value.iter().zip(expected.iter()) {
+                    res.push((ExecuteCondition::Score {
+                        target: val_i.clone().into(),
+                        target_obj: crate::compile_ir::OBJECTIVE.into(),
+                        kind: ExecuteCondKind::Matches((*expected_i..=*expected_i).into())
+                    }, false));
+                }
+                
+                res
             }
-            BlockEdge::SwitchDefault { value, not_expected } => {
-                not_expected.into_iter()
-                    .map(|ne| {
-                        (ExecuteCondition::Score {
-                            target: value.clone().into(),
-                            target_obj: crate::compile_ir::OBJECTIVE.into(),
-                            kind: ExecuteCondKind::Matches((ne..=ne).into())
-                        }, true)
-                    })
-                    .collect()
+            BlockEdge::SwitchDefault { cond } => {
+                vec![(ExecuteCondition::Score {
+                    target: cond.into(),
+                    target_obj: crate::compile_ir::OBJECTIVE.into(),
+                    kind: ExecuteCondKind::Matches((1..=1).into()),
+                }, false)]
             }
         }
     }

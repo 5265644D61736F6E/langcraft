@@ -1196,7 +1196,7 @@ fn getelementptr_const(
                 return 0;
             }
         } else {
-            eprintln!("[ERR] {:?} is unimplemented for getelementptr", address);
+            eprintln!("[ERR] {:?} is unimplemented for getelementptr", &**address);
             return 0;
         };
         
@@ -3329,14 +3329,14 @@ pub(crate) fn compile_terminator(
             operand,
             dests,
             default_dest,
-            ..
+            debugloc,
         }) => {
             let (tmp, op) = eval_operand(operand, globals, tys);
             cmds.extend(tmp);
 
             let operand = match &*operand.get_type(tys) {
                 Type::IntegerType { bits: 32 } => {
-                    op.into_iter().next().unwrap()
+                    vec![op.into_iter().next().unwrap()]
                 }
                 Type::IntegerType { bits: 16 } => {
                     let op = op.into_iter().next().unwrap();
@@ -3346,7 +3346,7 @@ pub(crate) fn compile_terminator(
                     cmds.push(assign(tmp.clone(), op));
                     cmds.push(make_op_lit(tmp.clone(), "%=", 65536));
 
-                    tmp
+                    vec![tmp]
                 }
                 Type::IntegerType { bits: 8 } => {
                     let op = op.into_iter().next().unwrap();
@@ -3356,7 +3356,10 @@ pub(crate) fn compile_terminator(
                     cmds.push(assign(tmp.clone(), op));
                     cmds.push(make_op_lit(tmp.clone(), "%=", 256));
 
-                    tmp
+                    vec![tmp]
+                }
+                Type::IntegerType { bits: 64 } => {
+                    vec![op[0].clone(),op[1].clone()]
                 }
                 Type::IntegerType { bits } => {
                     eprintln!("[ERR] Switch with {}-bit operand is unsupported",bits);
@@ -3364,7 +3367,7 @@ pub(crate) fn compile_terminator(
                     let tmp = get_unique_holder();
                     
                     cmds.push(assign_lit(tmp.clone(),0));
-                    tmp
+                    vec![tmp]
                 }
                 o => {
                     eprintln!("[ERR] Switch with {:?} is unsupported",o);
@@ -3372,7 +3375,7 @@ pub(crate) fn compile_terminator(
                     let tmp = get_unique_holder();
                     
                     cmds.push(assign_lit(tmp.clone(),0));
-                    tmp
+                    vec![tmp]
                 }
             };
 
@@ -3387,38 +3390,92 @@ pub(crate) fn compile_terminator(
                         if let MaybeConst::Const(expected) = eval_constant(dest_value, globals, tys) {
                             BlockEdge::SwitchCond { 
                                 value: operand.clone(),
-                                expected,
+                                expected: vec![expected],
                             }
                         } else {
                             unreachable!()
                         }
                     }
-                    _ => todo!()
+                    Type::IntegerType { bits: 64 } => {
+                        if let Constant::Int { bits: 64, value } = &**dest_value {
+                            BlockEdge::SwitchCond { 
+                                value: operand.clone(),
+                                expected: vec![*value as i32,(*value >> 32) as i32],
+                            }
+                        } else {
+                            unreachable!()
+                        }
+                    }
+                    Type::IntegerType { bits } => {
+                        eprintln!("[ERR] {}-bit switch is unsupported",bits);
+                        BlockEdge::SwitchCond { 
+                            value: operand.clone(),
+                            expected: vec![0],
+                        }
+                    }
+                    a => todo!("{:?}",a)
                 };
 
                 (edge, dest_id)
             }).collect::<Vec<_>>();
 
             let default_dest_id = McFuncId::new_block(&parent.name, default_dest.clone());
+            
+            let default_cond = get_unique_holder();
+            
+            cmds.push(assign_lit(default_cond.clone(), 1));
+            cmds.reserve(dests.len());
 
-            let not_expected = dests.iter().map(|(dest_value, _)| {
+            for (dest_value, _) in dests.iter() {
                 match &*dest_value.get_type(tys) {
                     Type::IntegerType { bits: 32 } |
                     Type::IntegerType { bits: 16 } | 
                     Type::IntegerType { bits: 8 } => {
                         if let MaybeConst::Const(ne) = eval_constant(dest_value, globals, tys) {
-                            ne
+                            let mut exec = Execute::new();
+                            
+                            exec.with_if(ExecuteCondition::Score {
+                                target: operand[0].clone().into(),
+                                target_obj: OBJECTIVE.into(),
+                                kind: ExecuteCondKind::Matches((ne..=ne).into())
+                            });
+                            exec.with_run(assign_lit(default_cond.clone(), 0));
+                            
+                            cmds.push(exec.into());
                         } else {
                             unreachable!()
                         }
                     }
+                    Type::IntegerType { bits: 64 } => {
+                        if let Constant::Int { bits: 64, value } = &**dest_value {
+                            let mut exec = Execute::new();
+                            let (hi, lo) = ((*value >> 32) as i32, *value as i32);
+                            
+                            exec.with_if(ExecuteCondition::Score {
+                                target: operand[0].clone().into(),
+                                target_obj: OBJECTIVE.into(),
+                                kind: ExecuteCondKind::Matches((lo..=lo).into())
+                            });
+                            exec.with_if(ExecuteCondition::Score {
+                                target: operand[1].clone().into(),
+                                target_obj: OBJECTIVE.into(),
+                                kind: ExecuteCondKind::Matches((hi..=hi).into())
+                            });
+                            exec.with_run(assign_lit(default_cond.clone(), 0));
+                            
+                            cmds.push(exec.into());
+                        } else {
+                            dumploc(debugloc);
+                            eprintln!("[FATAL] Expected a constant 64-bit integer argument for type 64-bit integer, got {:?}",&**dest_value);
+                            panic!()
+                        }
+                    }
                     _ => todo!()
                 }
-            }).collect();
+            }
 
             let default_edge = BlockEdge::SwitchDefault {
-                value: operand,
-                not_expected,
+                cond: default_cond
             };
 
             edges.push((default_edge, default_dest_id));
