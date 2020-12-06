@@ -3145,6 +3145,48 @@ fn compile_call(
 
                 (cmds, None)
             }
+            "llvm.stacksave" => {
+                if arguments.len() != 0 {
+                    dumploc(debugloc);
+                    eprintln!("[WARN] Too many arguments to llvm.stacksave(void)");
+                }
+                
+                match dest {
+                    Some(dest) => {
+                        if dest.len() == 1 {
+                            (vec![assign(dest[0].clone(), stackptr())], None)
+                        } else {
+                            dumploc(debugloc);
+                            eprintln!("[ERR] Expected a 32-bit destination for llvm.stacksave");
+                            (vec![], None)
+                        }
+                    }
+                    None => {
+                        dumploc(debugloc);
+                        eprintln!("[WARN] Expected to save the stack to a variable");
+                        (vec![], None)
+                    }
+                }
+            }
+            "llvm.stackrestore" => {
+                if arguments.len() > 1 {
+                    dumploc(debugloc);
+                    eprintln!("[WARN] Too many arguments to llvm.stackrestore(void*)");
+                    (vec![], None)
+                } else if arguments.len() < 1 {
+                    dumploc(debugloc);
+                    eprintln!("[WARN] Too few arguments to llvm.stackrestore(void*)");
+                    (vec![], None)
+                } else if matches!(dest, Some(dest)) {
+                    dumploc(debugloc);
+                    eprintln!("[ERR] llvm.stackrestore(void*) does not return a value");
+                    (vec![], None)
+                } else {
+                    let mut cmds = setup_arguments(arguments, globals, tys);
+                    
+                    (vec![assign(stackptr(), param(0, 0).clone())], None)
+                }
+            }
             _ => {
                 let mut before_cmds = Vec::new();
 
