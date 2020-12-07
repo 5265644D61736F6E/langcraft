@@ -1160,14 +1160,13 @@ fn make_build_cmds(main_id: &McFuncId) -> Vec<Command> {
 }*/
 
 /*
- * The message for unreachable cases
+ * The message for an input that has not been expected.
  *
- * It's better to notify the user if no one realizes the use cases for an unimplemented feature.
- * Saying 'entered unreachable code' sounds confusing, as if langcraft itself caused a crash when
- * the LLVM generator has actually compiled user code into an obscure input that langcraft wasn't
- * aware could be generated.
+ * It's better to notify the user if the input is unexpected rather than 'unreachable'. Unreachable
+ * is more suitable for internally unreachable states instead of invalid inputs. Saying 'entered
+ * unreachable code' sounds confusing, as if the code is unaware of what it generates by itself.
  */
-const unreach_msg: &str = "[NOTE] Your code sounds unpleasant, perhaps you should get it examined.";
+const INVALID_INPUT_MSG: &str = "[NOTE] Your code sounds unpleasant, perhaps you should get it examined.";
 
 fn getelementptr_const(
     GetElementPtrConst {
@@ -2332,7 +2331,7 @@ fn compile_lshr(
         } else {
             dumploc(debugloc);
             eprintln!("[ERR] Can not shift a vector of {:?}",element_type);
-            eprintln!("{}",unreach_msg);
+            eprintln!("{}",INVALID_INPUT_MSG);
             
             cmds
         }
@@ -2655,7 +2654,7 @@ fn compile_call(
                         chars.push(*value as u8);
                     } else {
                         eprintln!("[FATAL] Can only parse 8-bit arrays, not arrays of {:?}",&**c);
-                        eprintln!("{}",unreach_msg);
+                        eprintln!("{}",INVALID_INPUT_MSG);
                         panic!()
                     }
                 }
@@ -6548,7 +6547,7 @@ pub fn compile_instr(
                 } else {
                     dumploc(debugloc);
                     eprintln!("[ERR] Cannot convert non-integer to 16-bit integer");
-                    eprintln!("{}",unreach_msg);
+                    eprintln!("{}",INVALID_INPUT_MSG);
                 }
                 
                 cmds
@@ -6570,7 +6569,7 @@ pub fn compile_instr(
                 } else {
                     dumploc(debugloc);
                     eprintln!("[ERR] Cannot convert non-integer to 8-bit integer");
-                    eprintln!("{}",unreach_msg);
+                    eprintln!("{}",INVALID_INPUT_MSG);
                 }
                 
                 cmds
@@ -6604,7 +6603,7 @@ pub fn compile_instr(
                     } else {
                         dumploc(debugloc);
                         eprintln!("[ERR] Can not sign extend non-vector to vector");
-                        eprintln!("{}",unreach_msg);
+                        eprintln!("{}",INVALID_INPUT_MSG);
                     }
                 } else if let Type::IntegerType { bits } = &**element_type {
                     dumploc(debugloc);
@@ -7251,13 +7250,13 @@ pub fn compile_instr(
                 } else {
                     dumploc(debugloc);
                     eprintln!("[ERR] LandingPad not supported with type {:?}",&**result_type);
-                    eprintln!("{}",unreach_msg);
+                    eprintln!("{}",INVALID_INPUT_MSG);
                     vec![]
                 }
             } else {
                 dumploc(debugloc);
                 eprintln!("[ERR] LandingPad not supported with type {:?}",&**result_type);
-                eprintln!("{}",unreach_msg);
+                eprintln!("{}",INVALID_INPUT_MSG);
                 vec![]
             }
         }
@@ -7350,7 +7349,7 @@ pub fn compile_instr(
             } else {
                 dumploc(debugloc);
                 eprintln!("[ERR] The address operand in AtomicRMW needs to be a pointer.");
-                eprintln!("{}",unreach_msg);
+                eprintln!("{}",INVALID_INPUT_MSG);
             }
 
             Vec::new()
@@ -7543,12 +7542,12 @@ pub fn compile_instr(
                 } else {
                     dumploc(debugloc);
                     eprintln!("[ERR] Can only compare floating points as floating points");
-                    eprintln!("{}",unreach_msg);
+                    eprintln!("{}",INVALID_INPUT_MSG);
                 }
             } else {
                 dumploc(debugloc);
                 eprintln!("[ERR] Cannot floating point compare differing types");
-                eprintln!("{}",unreach_msg);
+                eprintln!("{}",INVALID_INPUT_MSG);
             }
 
             Vec::new()
@@ -7589,7 +7588,7 @@ pub fn compile_instr(
             } else {
                 dumploc(debugloc);
                 eprintln!("[ERR] Floating point extend is only supported for floating point types.");
-                eprintln!("{}",unreach_msg);
+                eprintln!("{}",INVALID_INPUT_MSG);
                 Vec::new()
             }
         }
@@ -7670,7 +7669,7 @@ pub fn compile_instr(
             } else {
                 dumploc(debugloc);
                 eprintln!("[ERR] Unsigned integer to floating point is only supported for floating point types.");
-                eprintln!("{}",unreach_msg);
+                eprintln!("{}",INVALID_INPUT_MSG);
                 Vec::new()
             }
         }
@@ -7719,7 +7718,7 @@ pub fn compile_instr(
             } else {
                 dumploc(debugloc);
                 eprintln!("[ERR] Unsigned integer to floating point is only supported for floating point types.");
-                eprintln!("{}",unreach_msg);
+                eprintln!("{}",INVALID_INPUT_MSG);
                 Vec::new()
             }
         }
@@ -7772,14 +7771,14 @@ pub fn compile_instr(
                     (_,_) => {
                         dumploc(debugloc);
                         eprintln!("[ERR] Floating point to unsigned integer is only supported for integer types.");
-                        eprintln!("{}",unreach_msg);
+                        eprintln!("{}",INVALID_INPUT_MSG);
                         Vec::new()
                     }
                 }
             } else {
                 dumploc(debugloc);
                 eprintln!("[ERR] Floating point to unsigned integer is only supported for floating point types.");
-                eprintln!("{}",unreach_msg);
+                eprintln!("{}",INVALID_INPUT_MSG);
                 Vec::new()
             }
         }
@@ -7816,14 +7815,14 @@ pub fn compile_instr(
                     (_,_) => {
                         dumploc(debugloc);
                         eprintln!("[ERR] Floating point to signed integer is only supported for integer types.");
-                        eprintln!("{}",unreach_msg);
+                        eprintln!("{}",INVALID_INPUT_MSG);
                         Vec::new()
                     }
                 }
             } else {
                 dumploc(debugloc);
                 eprintln!("[ERR] Floating point to signed integer is only supported for floating point types.");
-                eprintln!("{}",unreach_msg);
+                eprintln!("{}",INVALID_INPUT_MSG);
                 Vec::new()
             }
         }
