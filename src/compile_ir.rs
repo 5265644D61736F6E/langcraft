@@ -732,11 +732,15 @@ pub fn compile_module(module: &Module, options: &BuildOptions) -> Vec<McFunction
             println!("{} -> {}", func.body.id, dest);
         }
     }
+    
+    let funcs_len = funcs.len();
 
     // Step 4: Reify call graph to MC functions
     let mut funcs = funcs
         .into_iter()
-        .map(|block| {
+        .enumerate()
+        .map(|(num, block)| {
+            println!("Basic block {}/{}",num,funcs_len);
             reify_block(block, &clobber_list, &func_starts, &globals, &module.types)
         })
         .collect::<Vec<_>>();
