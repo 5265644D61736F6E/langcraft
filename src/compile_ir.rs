@@ -3171,20 +3171,24 @@ fn compile_call(
             "llvm.stackrestore" => {
                 if arguments.len() > 1 {
                     dumploc(debugloc);
-                    eprintln!("[WARN] Too many arguments to llvm.stackrestore(void*)");
+                    eprintln!("[ERR] Too many arguments to llvm.stackrestore(void*)");
                     (vec![], None)
                 } else if arguments.len() < 1 {
                     dumploc(debugloc);
-                    eprintln!("[WARN] Too few arguments to llvm.stackrestore(void*)");
-                    (vec![], None)
-                } else if matches!(dest, Some(dest)) {
-                    dumploc(debugloc);
-                    eprintln!("[ERR] llvm.stackrestore(void*) does not return a value");
+                    eprintln!("[ERR] Too few arguments to llvm.stackrestore(void*)");
                     (vec![], None)
                 } else {
                     let mut cmds = setup_arguments(arguments, globals, tys);
                     
-                    (vec![assign(stackptr(), param(0, 0).clone())], None)
+                    if let Some(dest) = dest {
+                        dumploc(debugloc);
+                        eprintln!("[WARN] llvm.stackrestore(void*) does not return a value");
+                        cmds.push(assign(dest[0].clone(), param(0, 0)));
+                    }
+                    
+                    cmds.push(assign(stackptr(), param(0, 0)));
+                    
+                    (cmds, None)
                 }
             }
             "llvm.trap" => {
