@@ -8181,7 +8181,7 @@ pub fn eval_constant(
             }
         }
         Constant::Float(llvm_ir::constant::Float::Single(val)) => {
-            let mut val_int = 0;
+            let val_int;
             
             unsafe {
                 val_int = *(val as *const f32 as *const i32);
@@ -8190,7 +8190,7 @@ pub fn eval_constant(
             MaybeConst::Const(val_int)
         }
         Constant::Float(llvm_ir::constant::Float::Double(val)) => {
-            let mut val_int = 0;
+            let val_int;
             
             unsafe {
                 val_int = *(val as *const f64 as *const i64);
