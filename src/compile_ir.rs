@@ -3187,6 +3187,13 @@ fn compile_call(
                     (vec![assign(stackptr(), param(0, 0).clone())], None)
                 }
             }
+            "llvm.trap" => {
+                (vec![SetBlock {
+                    pos: TICK_CMD_BLOCK_POS.to_owned(),
+                    block: "minecraft:air".to_owned(),
+                    kind: SetBlockKind::Replace,
+                }.into()], None)
+            }
             _ => {
                 let mut before_cmds = Vec::new();
 
@@ -3629,6 +3636,7 @@ fn reify_block(AbstractBlock { needs_prolog, mut body, term, parent }: AbstractB
 
 static RESUME_BLOCK_POS: &str = "-2 1 1";
 static ACTIVATE_BLOCK_POS: &str = "-2 1 0";
+static TICK_CMD_BLOCK_POS: &str = "-2 0 0";
 
 fn compile_block_end(block_end: &BlockEnd, body_cmds: usize, parent: &Function, clobbers: BTreeSet<ScoreHolder>, func_starts: &HashMap<String, McFuncId>, globals: &GlobalVarList, tys: &Types) -> Vec<Command> {
     let mut cmds = Vec::new();
